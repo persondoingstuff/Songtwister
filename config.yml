@@ -1,0 +1,15 @@
+locations:
+  songs: ./songs.yml
+  presets: ./effect_presets/
+preferences:
+  crossfade: 1/128
+  overwrite: False
+  main_preset_set:
+  - swing
+  - folk
+  - waltz
+  - seven
+html_visualization:
+  generate: False
+  template_path: ./waveform_template.html.j2
+  waveform_resolution: 400

@@ -1,0 +1,50 @@
+three_1:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 1
+    beats_per_bar: 4
+three_2:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 2
+    beats_per_bar: 4
+three_3:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 4
+three_4:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 4
+three_3fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 4
+  - effect: speedupfill 1.5
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 4
+three_4speed:
+  effects:
+  - effect: speedup 1.25
+    bars: all
+    beats: 4
+    beats_per_bar: 4
+three_4fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 4
+  - effect: speedupfill 2
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 4

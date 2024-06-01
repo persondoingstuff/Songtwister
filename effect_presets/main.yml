@@ -1,0 +1,31 @@
+waltz:
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 4
+
+folk:
+  crossfade: 1/48
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 8
+
+swing:
+  crossfade: 1/48
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 16
+
+seven:
+  crossfade: 1/64
+  effects:
+  - effect: remove
+    bars: all
+    beats: 8
+    beats_per_bar: 8

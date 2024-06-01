@@ -1,0 +1,38 @@
+swing_3:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+swing_4:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 16
+superswing:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 32
+swing_4fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 16
+  - effect: speedupfill 1.5
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+swing_3fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+  - effect: speedupfill 1.5
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 16

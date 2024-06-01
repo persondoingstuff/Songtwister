@@ -1,0 +1,105 @@
+drag:
+  effects:
+  - effect: speedup 1.5
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 8
+  - effect: speedup 1.5
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 8
+drag_fast:
+  effects:
+  - effect: speedup 2
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+  - effect: speedup 2
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 16
+
+swing_test:
+  effects:
+  - effect: silence
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+dance_a:
+  effects:
+  - effect: pingpong 2
+    bars: even
+    beats: 4
+    beats_per_bar: 4
+  - effect: pitchdown 12
+    bars: odd
+    beats: 2
+    beats_per_bar: 2
+test1:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 16
+
+
+deswing:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 2 of 3
+    beats_per_bar: 6
+swingfive:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 6
+    beats_per_bar: 6
+swungwaltz:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 10-12
+    beats_per_bar: 12
+swungstraight_2:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 2, 5, 8, 11
+    beats_per_bar: 12
+swungstraight:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 3, 6, 9, 12
+    beats_per_bar: 12
+swungstraight_extra_2:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 2 of 3
+    beats_per_bar: 24
+swungstraight_extra:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 3
+    beats_per_bar: 24
+swungfolk:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 3-4, 9-10
+    beats_per_bar: 12
+swungfive:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 6, 12
+    beats_per_bar: 12
+swungten:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 11-12
+    beats_per_bar: 12

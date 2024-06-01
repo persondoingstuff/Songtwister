@@ -1,0 +1,12 @@
+seven_last:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 8
+    beats_per_bar: 8
+seven_middle:
+  effects:
+  - effect: remove
+    bars: all
+    beats: 4
+    beats_per_bar: 8

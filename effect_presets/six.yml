@@ -1,0 +1,44 @@
+six_1:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 1 of 4
+    beats_per_bar: 8
+six_2:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 8
+six_3:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 8
+six_4:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 8
+six_4fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 8
+  - effect: speedupfill 1.5
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 8
+six_3fill:
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 3 of 4
+    beats_per_bar: 8
+  - effect: speedupfill 1.5
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 8

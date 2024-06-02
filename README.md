@@ -1,5 +1,7 @@
 # Songtwister
-Twist songs by removing or transforming beats.
+> Twist songs by removing or transforming beats.
+
+Author: Sigfred Nielsen (persondoingstuff.com)
 
 A Python script that takes an audio file, the beats per minute count and the position of the first beat, and uses it to apply various effects presets to the audio.
 
@@ -11,7 +13,12 @@ The primary effect is ‘remove’, but other effects are available. These inclu
 
 ## Installation and Getting  Started
 
-Dependencies: a recent version of Python 3, ffmpeg and git.
+Dependencies:
+
+- A recent version of Python 3, ffmpeg and git.
+- The python packages PyDub, PyYAML and Jinja2, along with their dependencies.
+
+It is recommended to install the script in a virtual environment.
 
 Linux, and probably Mac OS:
 
@@ -20,6 +27,7 @@ git clone https://github.com/persondoingstuff/Songtwister.git
 cd Songtwister
 python -m venv venv
 source venv/bin/activate
+pip install -r requirements.txt
 python3 run.py -s example
 ```
 
@@ -30,6 +38,7 @@ git clone https://github.com/persondoingstuff/Songtwister.git
 cd Songtwister
 python -m venv venv
 .\venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 python .\run.py -s example
 ```
 
@@ -88,45 +97,31 @@ You can see the available effect presets in the `effect_presets` directory. You 
 ## Detailed usage of the command line interface
 
 ```
-    parser.add_argument("-s", "--song", required=True, type=str,
-                        help="The name of the song definition, "
-                        "set in the songs file")
-    parser.add_argument("-p", "--preset", required=False, type=str,
-                        help="The preset to use. Presets may be defined "
-                        "in the presets file and called here by name.")
-    parser.add_argument("-c", "--crossfade", required=False,
-                        help="Length of the crossfade between cuts in the "
-                        "song, overriding values set elsewhere. May be "
-                        "an int of the number of milliseconds, or a "
-                        "fraction of a bar length. Eg. 1/4, corresponding "
-                        "to a full beat in a four beat bar. Default is 1/128.")
-    parser.add_argument("-n", "--version-name", required=False, type=str,
-                        help="Optionally give the processing of the song "
-                        "a version name.")
-    parser.add_argument("-g", "--guess-prefix",
-                        action="store_true", 
-                        default=False,
-                        help="Guess the number of milliseconds of prefix "
-                        "in the song before the beat starts, and generate files "
-                        "with single bars to evaluate the guessed value.")
-    parser.add_argument("-l", "--make-html",
-                        action="store_true",
-                        default=make_html_default,
-                        help="Generate an HTML page with audio players for "
-                        "the exported audio files.")
-    parser.add_argument("-a", "--all",
-                        action="store_true",
-                        default=False,
-                        help="Generate the default set of presets "
-                        "as defined in the config file.")
-    parser.add_argument("-y", "--overwrite",
-                        action="store_true",
-                        default=overwrite_default,
-                        help="Overwrite existing files with same name.")
-    parser.add_argument("-v", "--verbose",
-                        action="store_true",
-                        default=verbose_default,
-                        help="Output detailed logging.")
+usage: run.py [-h] -s SONG [-p PRESET] [-c CROSSFADE] [-n VERSION_NAME] [-g] [-l] [-a] [-y] [-v]
+
+options:
+  -h, --help            show this help message and exit
+  -s SONG, --song SONG  The name of the song definition, set in the songs file. Required.
+  -p PRESET, --preset PRESET
+                        The preset to use. Presets may be defined in the presets file and called here by name.
+                        If this is not defined, the main set of presets from the config will be generated.
+                        If * is passed, every preset will be generated. Optional.
+  -c CROSSFADE, --crossfade CROSSFADE
+                        Length of the crossfade between cuts in the song, overriding values set elsewhere.
+                        May be an int of the number of milliseconds, or a fraction of a bar length.
+                        Eg. 1/4, corresponding to a full beat in a four beat bar. Default is 1/128.
+                        Optional. Global setting controlled in config.yml
+  -n VERSION_NAME, --version-name VERSION_NAME
+                        Give the processing of the song a version name. Optional.
+  -g, --guess-prefix    Guess the number of milliseconds of prefix in the song before the beat starts,
+                        and generate files with single bars to evaluate the guessed value. Optional.
+  -l, --make-html       Generate an HTML page with audio players for the exported audio files. Optional.
+  -a, --all             Generate the default set of presets as defined in the config file.
+                        Optional and implied if --preset is not defined.
+  -y, --overwrite       Overwrite existing files with same name.
+                        Optional. Global setting controlled in config.yml
+  -v, --verbose         Output detailed logging.
+                        Optional. Global setting controlled in config.yml
 ```
 
 

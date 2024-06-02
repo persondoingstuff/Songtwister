@@ -1,3 +1,5 @@
+- Add proper testing
 - Enable setting an output dir in config and in the song definitions
 - Enable setting a standard input/output dir in config
 - Make HTML template configurable
+- Improve effects and documentation of them

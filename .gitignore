@@ -1,5 +1,7 @@
 effect_presets/custom.yml
-songs/*
+song_defintions/*
+song_data/*
+logs/*
 
 # THIS IS AUTO-GENERATED:
 

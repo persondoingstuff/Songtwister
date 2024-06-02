@@ -1,0 +1,10 @@
+example:
+  filename: song_data/afternoon.mp3
+  bpm: 110
+  prefix_length_ms: 0
+  comment: This work was made by Sigfred Nielsen and is licensed under CC BY 4.0. See more at https://creativecommons.org/licenses/by/4.0/
+example2:
+  filename: song_data/cigars.mp3
+  bpm: 97
+  prefix_length_ms: 0
+  comment: This work was made by Sigfred Nielsen and is licensed under CC BY 4.0. See more at https://creativecommons.org/licenses/by/4.0/

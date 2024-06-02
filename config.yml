@@ -1,5 +1,6 @@
 locations:
-  songs: ./songs.yml
+  default_data_path: ./song_data/
+  song_definitions: ./song_definitions/
   presets: ./effect_presets/
 preferences:
   crossfade: 1/128
@@ -9,6 +10,9 @@ preferences:
   - folk
   - waltz
   - seven
+logging:
+  level: INFO
+  log_to_file: True
 html_visualization:
   generate: False
   template_path: ./waveform_template.html.j2

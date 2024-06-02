@@ -1,0 +1,120 @@
+<!doctype html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{{ title }}</title>
+  <style>
+    audio {
+      width: 100%;
+    }
+
+    .waveform {
+      background: #eee;
+      --size: .5rem;
+      height: 15rem;
+      display: flex;
+      /*gap: var(--size);*/
+      align-items: center;
+      padding: .5rem;
+      border-radius: .5rem;
+    }
+
+    .waveform.small {
+      --size: .25rem;
+    }
+
+    .waveform.big {
+      --size: .75rem;
+    }
+
+    .waveform.locked {
+      overflow-x: scroll;
+    }
+
+    .waveform.locked>span {
+      min-width: var(--size);
+    }
+
+    .waveform>span {
+      background-color: blue;
+      border-radius: .25em;
+      flex: 1;
+    }
+
+    section.player .waveform::after {
+      width: calc(var(--playback-pos, 0) * 1%);
+      height: 100%;
+      background: yellow;
+      position: absolute;
+      top: 0;
+      left: 0;
+      content: "";
+      transition: all .1s;
+      mix-blend-mode: difference
+    }
+
+    section.player .waveform {
+      position: relative;
+    }
+  </style>
+</head>
+
+<body>
+  <main>
+    <h1>{{ title }}</h1>
+    <p>
+      Length: {{ song.audio_length_ms }} ms |
+      Bar length: {{ song.bar_length_ms }} ms |
+      Beat length: {{ song.beat_length_ms }} ms
+    </p>
+    <p>
+      Prefix: {{ song.prefix_length_ms }} ms |
+      Suffix: {{ song.suffix_length_ms }}ms |
+      Crossfade: {{ song.crossfade }}
+    </p>
+    {% for note in notes %}
+    <p>{{ note }}</p>
+    {% endfor %}
+    {% for section in sections %}
+    <section class="player">
+      <h2>{{ section.title }}</h2>
+      <audio controls>
+        <source src="{{ section.file }}" type="audio/mpeg">
+      </audio>
+      <div class="waveform">
+        {% for peak in section.waveform %}
+        <span style="height: {{ peak }}%"></span>
+        <span></span>
+        {% endfor %}
+      </div>
+    </section>
+    {% endfor %}
+  </main>
+</body>
+
+<script>
+  document.querySelectorAll('.player').forEach((player) => {
+    let audio = player.querySelector('audio')
+    let wf = player.querySelector('.waveform')
+    let title = player.querySelector('h2')
+
+    wf.addEventListener('click', function (event) {
+      console.log(audio, audio.currentTime, audio.paused)
+      if (!audio.paused) {
+        audio.pause()
+      } else {
+        audio.play()
+      }
+    })
+
+    audio.addEventListener('timeupdate', function (event) {
+      let currentSeconds = (Math.floor(audio.currentTime % 60) < 10 ? '0' : '') + Math.floor(audio.currentTime % 60);
+      let currentMinutes = Math.floor(audio.currentTime / 60);
+      let percentageOfSong = (audio.currentTime / audio.duration) * 100;
+      player.style.setProperty('--playback-pos', percentageOfSong);
+    })
+  })
+</script>
+
+</html>

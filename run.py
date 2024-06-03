@@ -87,6 +87,7 @@ def read_yaml(path: str | Path) -> dict:
         return _load(path)
     elif path.is_dir():
         data = [_load(file) for file in path.iterdir()]
+        data = [x for x in data if x is not None]
         skipping = [x for x in data if not isinstance(x, dict)]
         if skipping:
             logger.warning("Skipping invalid preset entries: %s", skipping)

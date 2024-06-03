@@ -1,59 +1,3 @@
-"""
-
-When instantiated, we get filepath, bpm, beats per bar. Optionally prefix, suffix length.
-When file is loaded, the full audio ms length is set. This is used to calculate cut points.
-From the bpm and beats per bar, beat and bar lengths in ms are stored.
-
-A method tries to guess prefix length (using leading silence).
-A method sets length of prefix and suffix.
-
-A method gets a bar dict.
-    Take the ms length
-    Take the ms prefix offset
-    At that value, add as many ms bar lengths as possible, until reaching either ms suffix value,
-        or the remainder is shorter than a bar length.
-    This is also how suffix length is calculated, basically.
-    Return a dict containing the number and the start and end point of each bar, in ms.
-        Also the beats of each bar, start and end point, as well as number.
-    Store this on the object. When adding effects and such, do it by adding directives on bars and beats
-
-A method outputs the state data -- general properties and the current bars dict. The AudioSegment is not included.
-    This can be used to instantiate a new object with, between web requests. Audio is only loaded when needed.
-
-A method saves an AudioSegment as a a file
-
-A method gets a specified bar from the audio, using the bars dict to get cut points
-
-
-MISSING:
-A method can target certain bars and beats (eventually sections), and set processing directives
-
-A method does the processing
-    Take the dict with bars and directives.
-    If the audio is not currently loaded, load it.
-    Run through the bars dict. For any bar with processing to apply, cut up the audio and do the processing.
-    AudioSegments are added to a list, to be joined at the end. Or are they joined as we go?
-    Account for crossfading here.
-    Only bars needing processing are cut up.
-
-A method calls the processing method, then the save method.
-
-
---
-
-Effects:
-- 'remove': Delete a section of the audio
-- 'silence': replace a section of the audio with silence
-- 'reverse': reverse a section of the audio
-- 'repeat': repeat a section of the audio, right after the original placement
-- 'move': move a section of the audio to a new placement
-- 'speedup': increase the playback speed of a section, preserving pitch
-- 'tempo': increase or decrease the speed of a section, changing pitch accordingly
-
-
-
-"""
-
 import random
 from typing import Optional
 from pathlib import Path
@@ -234,11 +178,11 @@ class SongTwister:
 
         if criteria == 'even':
             # Return even numbered bars
-            return [item for item in items if item % 2]
+            return [item for item in items if not item % 2]
 
         if criteria == 'odd':
             # Return odd numbered bars
-            return [item for item in items if not item % 2]
+            return [item for item in items if item % 2]
         
         if criteria == 'first':
             # return a list containing the first item, if any
@@ -965,5 +909,5 @@ class SongTwister:
 
                 joined_audio = joined_audio.append(
                     beat_audio,
-                    crossfade=fade_length)
+                    crossfade=min(fade_length, len(beat_audio)))
         return joined_audio

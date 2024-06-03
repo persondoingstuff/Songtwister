@@ -1,4 +1,121 @@
-drag:
+wild_stuff:
+  crossfade: 1/2
+  effects:
+  - effect: speedupfill 2
+    bars: every 2 of 4
+    beats: 2
+    beats_per_bar: 2
+  - effect: right
+    bars: every 2 of 4
+    beats: 4
+    beats_per_bar: 4
+  - effect: pingpong 4
+    bars: every 3 of 4
+    beats: 4
+    beats_per_bar: 4
+  - effect: bounceback
+    bars: every 4 of 4
+    beats: every 4 of 4
+    beats_per_bar: 8
+  - effect: pitchdown 12
+    bars: every 4 of 4
+    beats: 2
+    beats_per_bar: 2
+  - effect: across
+    bars: every 4 of 4
+    beats: 2
+    beats_per_bar: 2
+  - effect: silence
+    bars: every 1 of 4
+    beats: every 2 of 2
+    beats_per_bar: 8
+
+downer:
+  effects:
+  - effect: pitchdown 12
+    bars: all
+    beats: odd
+    beats_per_bar: 4
+
+bounceby:
+  effects:
+  - effect: bounceback
+    bars: all
+    beats: odd
+    beats_per_bar: 4
+  - effect: across left
+    bars: all
+    beats: even
+    beats_per_bar: 4
+
+getback:
+  crossfade: 1/4
+  effects:
+  - effect: reverserepeat
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 4
+  - effect: reverserepeat
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 4
+
+moreplease:
+  crossfade: 1/4
+  effects:
+  - effect: repeat
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 8
+  - effect: repeat
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 8
+
+evenmore:
+  crossfade: 1/16
+  effects:
+  - effect: repeat
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 16
+  - effect: repeat
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 16
+
+muchmore:
+  crossfade: 1/32
+  effects:
+  - effect: repeat
+    bars: all
+    beats: every 2 of 4
+    beats_per_bar: 32
+  - effect: repeat
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 32
+
+smeared:
+  effects:
+  - effect: bounceback
+    bars: all
+    beats: 1
+    beats_per_bar: 1
+
+backforth:
+  crossfade: 1/32
+  effects:
+  - effect: across left
+    bars: all
+    beats: 1
+    beats_per_bar: 2
+  - effect: across right
+    bars: all
+    beats: 2
+    beats_per_bar: 2
+
+dragging:
   effects:
   - effect: speedup 1.5
     bars: all

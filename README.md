@@ -3,7 +3,9 @@
 
 Author: Sigfred Nielsen (persondoingstuff.com)
 
-A Python script that takes an audio file, the beats per minute count and the position of the first beat, and uses it to apply various effects presets to the audio.
+If you do anything with this, please drop me a note at sn@persondoingstuff.com
+
+Songtwister is a Python script that takes an audio file, the beats per minute count and the position of the first beat, and uses it to apply various effects presets to the audio.
 
 The main use case is to remove specific parts of each bar, transforming the time signature. Most pop songs are in 4/4 time. Removing one beat per bar makes it 3/4, giving it a waltz feel. Removing two half beats per bar, on the other hand, makes it 6/8 and gives it a boogie or folksy feel. And removing the last 16th note from each beat gives it a swing feel.
 
@@ -147,29 +149,45 @@ Multiple effects may be added, but in the main cases, it is only one.
 The above example instructs the script to target every bar of the song. Each bar is divided into 16, and every fourth is affected by the effect, which in this case simply removes the beats.
 
 These are the available effects:
+
 - 'remove': Delete a section of the audio
 - 'silence': replace a section of the audio with silence
 - 'reverse': reverse a section of the audio
 - 'repeat': repeat a section of the audio, right after the original placement
-- 'move': move a section of the audio to a new placement. FIXME: Does not exist, but it should
+- 'reverserepeat': first play the audio in reverse, then regularly
+- 'repeatreverse': first play the audio regularly, then in reverse
+- 'bounceback': the audio reverses back on top of itself
+- 'speed': increase or decrease the speed of a section, changing pitch accordingly
+  - Usage: `speed 1.1`
 - 'speedup': increase the playback speed of a section, preserving pitch
-- 'tempo': increase or decrease the speed of a section, changing pitch accordingly
+  - Usage: `speedup 2`
+- 'speedupfill': fill the same time as the original audio, but speed it up a certain amount.
+  - Usage: `speedupfill 1.5`
+- 'pitchdown': lower the pitch a number of semitones, very roughly.
+  - Usage: `pitchdown 12`
+- 'pingpong': make alternating hard pans of the audio a specified number of times (default 2)
+  - Usage: `pingpong 2`
+- 'left' and 'right': pan the audio to one of the sides
+- 'across left' and 'across right': start the audio panned to one side, and move it to the other
+- TODO: 'move': move a section of the audio to a new placement. Does not exist, but it should
 
-FIXME: Some are missing. Add additional usage information. There is also pingpong, pan
+Except for “remove” and “silence”, effects may be layered on top of each other. However, it will not always work, especially if different numbers of beats per bar are used.
 
-Except for “remove” and “silence”, effects may be layered on top of each other.
+Shorter or longer crossfades may be used to create interesting effects
 
 For “bars” and “beats” in the effect preset, the selection may be made like this:
 
-1. A number: select this specific bar
-2. `"even"` or `"odd"`: select alternating items.
-3. `"first"` or `"last"`: select the first or last item.
-4. `None`, `0`, `"none"` or `False`: select no items – a simple pass-through that is not terribly useful.
-5. `"all"` or `True`: select all items.
-6. `"random X"` (where X is a number):  select X random items. No number results in a random number of random items.
-7. `"every X of Y"` (where X and Y  are numbers): select item X in each batch of Y, for as many batches as can be made.
+- A number: select this specific bar
+- `"even"` or `"odd"`: select alternating items.
+- `"first"` or `"last"`: select the first or last item.
+- `None`, `0`, `"none"` or `False`: select no items – a simple pass-through that is not terribly useful.
+- `"all"` or `True`: select all items.
+- `"random X"` (where X is a number):  select X random items. No number results in a random number of random items.
+- `"every X of Y"` (where X and Y  are numbers): select item X in each batch of Y, for as many batches as can be made.
 
-Non-existing items are ignored
+Non-existing items are ignored.
+
+See various examples of presets in the files in the `effect_presets` folder.
 
 ## Importing and exporting song state
 

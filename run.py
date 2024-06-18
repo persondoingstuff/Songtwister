@@ -64,7 +64,7 @@ def make_html(output_file, song, sections, template_file=None, title=None, notes
 
     with open(output_file, mode="w", encoding="utf-8") as writer:
         writer.write(content)
-        print(f"Wrote {output_file}")
+        logger.info(f"Wrote {output_file}")
 
 def read_yaml(path: str | Path) -> dict:
     """Read a yaml file or a dir of yaml files"""

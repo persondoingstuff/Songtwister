@@ -298,6 +298,45 @@ class SongTwister:
         logger.warning('No valid criteria found')
         return []
 
+    @staticmethod
+    def perform_single_selection(
+        selector: str, current: int, first: int, last: int) -> Optional[int]:
+        """Select an int.
+            - 'this' selects the current beat or bar number
+            - 'next' and 'previous' selects the one before or after
+            - 'first' and 'last' selects those
+            - 'random' selects any bar or beat
+            - A number selects that specific beat or bar
+            - If nothing is matched (eg. if you try to select the bar
+              before #1 or a beat thad doesn't exist), it is just
+              silently ignored
+        """
+        if selector == 'this':
+            selected = current
+        elif selector == 'random':
+            selected = random.randint(first, last)
+        elif selector.isnumeric():
+            selector = int(selector)
+            if first <= selector <= last:
+                selected = selector
+            else:
+                return
+        elif selector == 'first':
+            selected = first
+        elif selector == 'last':
+            selected = last
+        elif selector == 'previous':
+            if current == first:
+                return
+            selected = current - 1
+        elif selector == 'next':
+            if current == last:
+                return
+            selected = current + 1
+        # TODO: Add support for next_n (eg. next_1, next_3) - 
+        # and the same for previous_n
+        return selected
+
 
     # PUBLIC METHODS
     def load_audio(self) -> None:
@@ -631,12 +670,14 @@ class SongTwister:
                         'number': number,
                         'start': bar.get('start') + (new_beat_length * (number -1)),
                         'end': bar.get('start') + (new_beat_length * number),
+                        'resolution': effect.get('resolution'),
                         'effects': []
                     }
                 beat_map[number].get('effects').append(effect.get('effect'))
+                # These effects override others
                 if 'remove' in beat_map[number].get('effects'):
                     beat_map[number]['effects'] = ['remove']
-                elif 'remove' in beat_map[number].get('effects'):
+                elif 'silence' in beat_map[number].get('effects'):
                     beat_map[number]['effects'] = ['silence']
 
             sequence[bar.get('number')] = beat_map
@@ -721,12 +762,12 @@ class SongTwister:
         joined_audio = AudioSegment.empty()        
         end_of_last_cut = 0  # ms index in audio where last cut point ended
         # We don't just take values(), so we can sort by the key
-        for _, bar in sorted(effect_map.items()):
+        for current_bar_number, bar in sorted(effect_map.items()):
             for cut in sorted(list(bar.values()), key=lambda x: x.get('number')):
                 start_time = cut.get('start')
                 end_time = cut.get('end')
                 cut_duration = end_time - start_time
-                beat_effects = cut.get('effects')
+                beat_effects: dict = cut.get('effects')
                 # We use the global crossfade length, unless there is not enough audio
                 # before or after.
                 if self.crossfade == 0:
@@ -786,6 +827,76 @@ class SongTwister:
                     # NOTE: Consider get_sample_slice()
                     beat_audio = self.audio[start_time:end_time]
                     beat_length = len(beat_audio)
+
+                    # if 'insert' or 'replace' are in effects we need to find and extract a piece of audio from the full song audio.
+                    # 'insert' appends it to the current beat audio. 'replace' removes the beat audio and puts this in instead.
+                    # Syntax: insert/replace <bar> <beat>
+                    # bar selectors may be: this, next, previous, next_n, previous_n, first, last, or a specific number (int).
+                    # If there are invalid values or the selection is out of range, we just move on.
+                    # So:
+                    # - get the effect and split it out
+                    # - if it is valid, parse the bar selection
+                    # - parse the beat selection
+                    # - determine the sample indices of the requested audio
+                    # - either replace beat_audio or join it with the crossfade
+                    insert_effect = [x for x in beat_effects
+                                     if x.startswith('insert')
+                                     or x.startswith('replace')]
+                    if insert_effect:
+                        # Parse selectors
+                        insert_parts = insert_effect[0].split()
+                        insert_type: str = insert_parts[0]
+                        if len(insert_parts) not in (2, 3):
+                            logger.error("Could not parse effect: %s", insert_effect)
+                            continue
+                        if len(insert_parts) == 2:
+                            insert_bar = 'this'
+                            insert_beat: str = insert_parts[1]
+                        else:
+                            insert_bar: str = insert_parts[1]
+                            insert_beat: str = insert_parts[2]
+                        # Set bar boundaries
+                        first_bar = 1
+                        last_bar = max([x.get('number') for x in self.bar_sequence])
+                        # Select bar
+                        selected_insert_bar = self.perform_single_selection(
+                            selector=insert_bar, current=current_bar_number,
+                            first=first_bar, last=last_bar)
+                        if not selected_insert_bar:
+                            continue
+                        # Select beat
+                        beat_count = cut.get('resolution')
+                        first_beat = 1
+                        last_beat = beat_count
+                        current_beat_number = cut.get('number')
+                        selected_insert_beat = self.perform_single_selection(
+                            selector=insert_beat, current=current_beat_number,
+                            first=first_beat, last=last_beat
+                        )
+                        if not selected_insert_beat:
+                            continue
+                        logger.debug("in bar %s at beat %s I will %s beat %s from bar %s. Beat count: %s",
+                                     current_bar_number, current_beat_number, insert_type,
+                                     selected_insert_beat, selected_insert_bar, beat_count)
+                        # Fetch bar from sequence and determine beat position
+                        target_bar = self.get_single_bar(selected_insert_bar)
+                        target_bar_start = target_bar.get('start')
+                        target_bar_end = target_bar.get('end')
+                        bar_length = target_bar_end - target_bar_start
+                        target_beat_length = bar_length / beat_count
+                        target_start_time = target_bar_start + (target_beat_length * (selected_insert_beat - 1))
+                        target_end_time = target_start_time + target_beat_length
+                        # Cut out the audio
+                        target_audio = self.audio[target_start_time:target_end_time]
+                        # Extend or replace beat audio
+                        if insert_type == 'replace':
+                            beat_audio = target_audio
+                        else:
+                            # FIXME support crossfade?
+                            beat_audio = beat_audio.append(target_audio, crossfade=0)
+                        beat_length = len(beat_audio)
+
+
 
                     speed = self._get_effect('speed', beat_effects, get_float=True)
                     if speed:

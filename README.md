@@ -169,7 +169,20 @@ These are the available effects:
   - Usage: `pingpong 2`
 - 'left' and 'right': pan the audio to one of the sides
 - 'across left' and 'across right': start the audio panned to one side, and move it to the other
-- TODO: 'move': move a section of the audio to a new placement. Does not exist, but it should
+- 'replace' and 'insert': takes a beat from somewhere else in the song and either replaces the current beat, or puts it afterwards (adding a beat to the bar)
+  - Syntax: `<effect> <bar> <beat>`
+    - effect: `insert` or `replace`
+    - bar and beat can be selected like this:
+      - 'this' selects the current beat or bar number
+      - 'next' and 'previous' selects the one before or after
+      - 'first' and 'last' selects those
+      - 'random' selects any bar or beat
+      - A number selects that specific beat or bar
+      - If nothing is matched (eg. if you try to select the bar before #1 or a beat thad doesn't exist), it is just silently ignored
+  - Examples:
+    - `replace this 4`: replace the current beat with #4 from this bar
+    - `insert next 2`: Take beat #2 from the next bar and insert after this beat
+    - `replace first first`: replace the current beat with the first beat in the first bar
 
 Except for “remove” and “silence”, effects may be layered on top of each other. However, it will not always work, especially if different numbers of beats per bar are used.
 

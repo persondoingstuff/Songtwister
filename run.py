@@ -253,7 +253,7 @@ def main() -> None:
             'default_data_path') / input_file
     if not input_file.exists():
         logger.error("Could not find input file at %s. Please check the "
-                     "song definition for '%s'", song_name)
+                     "song definition for '%s'", input_file, song_name)
         sys.exit(2)
     song_data['filename'] = input_file
 

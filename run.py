@@ -17,6 +17,7 @@ SCRIPT_DIR = Path(os.path.dirname(os.path.realpath(__file__)))
 
 logger = logging.getLogger('loading_logger')
 
+
 def guess_prefix_length(song_object: SongTwister, export_prefix=False,
                         test_bars=[1, 9, 12, 17, 33, 65]) -> None:
     logger.info("Trying to determine the prefix of song '%s'", song_object)
@@ -44,7 +45,9 @@ def guess_prefix_length(song_object: SongTwister, export_prefix=False,
         output_file=html_file, song=song_object, sections=sections,
         title=song_object.title, notes=notes)
 
-def make_html(output_file, song, sections, template_file=None, title=None, notes=None):
+
+def make_html(output_file, song, sections, template_file=None, title=None,
+              notes=None) -> None:
     environment = Environment(loader=FileSystemLoader("."))
     if not template_file:
         template_file = './resources/waveform_template.html.j2'
@@ -66,6 +69,7 @@ def make_html(output_file, song, sections, template_file=None, title=None, notes
         writer.write(content)
         logger.info(f"Wrote {output_file}")
 
+
 def read_yaml(path: str | Path) -> dict:
     """Read a yaml file or a dir of yaml files"""
     def _load(file) -> dict:
@@ -73,7 +77,7 @@ def read_yaml(path: str | Path) -> dict:
             logger.warning(
                 "'%s' does not appear to be a yaml file. Skipping", path)
             return {}
-        with open(file, 'r') as reader: 
+        with open(file, 'r') as reader:
             return yaml.safe_load(reader.read())
 
     if isinstance(path, str):
@@ -95,15 +99,17 @@ def read_yaml(path: str | Path) -> dict:
 
 
 def read_json(file: str | Path) -> dict | list:
-    with open(file, 'r') as reader: 
+    with open(file, 'r') as reader:
         return json.loads(reader.read())
-    
-def write_json(file: str, content: dict | list ) -> None:
-    with open(file, 'w') as writer: 
+
+
+def write_json(file: str, content: dict | list) -> None:
+    with open(file, 'w') as writer:
         return writer.write(json.dumps(content, indent=2))
 
+
 def save_song_html(song_object: SongTwister, peaks, filename: str,
-                   preset: str, version_name: Optional[str]=None):
+                   preset: str, version_name: Optional[str] = None) -> None:
     version = f"{version_name}_" if version_name else ""
     html_file = f"{song_object.stem_filepath}_{version}{preset}.html"
     sections = [{
@@ -114,6 +120,7 @@ def save_song_html(song_object: SongTwister, peaks, filename: str,
         output_file=html_file, song=song_object, sections=sections,
         title=song_object.title, notes=[version_name, f"Preset: {preset}"])
 
+
 def export_song(song_object: SongTwister) -> None:
     """Save the state of the song object, without the AudioSegment,
     to a json file"""
@@ -121,14 +128,16 @@ def export_song(song_object: SongTwister) -> None:
         file=f'{song_object.stem_filepath}.json',
         content=song_object.export_state())
 
+
 def import_song(filename: str | Path) -> SongTwister:
     """Load the state of the song object, without the AudioSegment,
     from a json file"""
     data = read_json(filename)
     return SongTwister(**data)
 
-def get_args(overwrite_default: bool=False, make_html_default: bool=False,
-             verbose_default: bool=False) -> argparse.Namespace:
+
+def get_args(overwrite_default: bool = False, make_html_default: bool = False,
+             verbose_default: bool = False) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
     parser.add_argument("-s", "--song", required=True, type=str,
                         help="The name of the song definition, "
@@ -149,11 +158,11 @@ def get_args(overwrite_default: bool=False, make_html_default: bool=False,
                         help="Optionally give the processing of the song "
                         "a version name.")
     parser.add_argument("-g", "--guess-prefix",
-                        action="store_true", 
+                        action="store_true",
                         default=False,
                         help="Guess the number of milliseconds of prefix "
-                        "in the song before the beat starts, and generate files "
-                        "with single bars to evaluate the guessed value.")
+                        "in the song before the beat starts, and generate "
+                        "files with single bars to evaluate the guessed value.")
     parser.add_argument("-l", "--make-html",
                         action="store_true",
                         default=make_html_default,
@@ -181,7 +190,8 @@ def set_up_logging(logging_config: dict, logging_level: int) -> logging.Logger:
     if log_to_file:
         log_dir = Path('logs')
         log_dir.mkdir(exist_ok=True, parents=True)
-        log_file = log_dir / f"songtwister_{date.isoformat(datetime.now())}.log"
+        log_file = log_dir / f"songtwister_{date.isoformat(
+            datetime.now())}.log"
         log_handlers.append(logging.FileHandler(log_file, mode='a'))
     logging.basicConfig(
         level=logging_level,
@@ -194,12 +204,13 @@ def set_up_logging(logging_config: dict, logging_level: int) -> logging.Logger:
 
 
 def main() -> None:
+    global logger
     try:
         config = read_yaml('config.yml')
     except FileNotFoundError:
         logger.error("ERROR: Could not find config file.")
         sys.exit(1)
-    
+
     locations_config: dict = config.get('locations')
     preferences_config = config.get('preferences')
     html_config = config.get('html_visualization')
@@ -219,7 +230,7 @@ def main() -> None:
     args = get_args(overwrite_default=overwrite_default,
                     make_html_default=make_html_default,
                     verbose_default=verbose_default)
-    
+
     song_name: str = args.song
     preset_name = args.preset
     crossfade = args.crossfade
@@ -261,7 +272,7 @@ def main() -> None:
         song = SongTwister(**song_data)
         guess_prefix_length(song)
         return  # In this case, we quit here
-    
+
     # Apply a specific preset or the main set defined in config
     if make_all or not preset_name:
         presets_to_apply: list[str] = preferences_config.get('main_preset_set')
@@ -271,7 +282,7 @@ def main() -> None:
         logger.info("Rendering every preset.")
     else:
         presets_to_apply = [preset_name]
-    
+
     # Set crossfade if it has been supplied as an arg
     if args.crossfade:
         crossfade = args.crossfade
@@ -295,8 +306,9 @@ def main() -> None:
         song_data['crossfade'] = crossfade
 
         song = SongTwister(**song_data)
-        logger.info("Processing '%s' using the preset %s and a crossfade of %s",
-                    song.title, preset, crossfade)
+        logger.info(
+            "Processing '%s' using the preset %s and a crossfade of %s",
+            song.title, preset, crossfade)
 
         preset_effects: list[dict] = preset_data.get('effects')
 
@@ -311,8 +323,8 @@ def main() -> None:
         fade_label = crossfade.replace('/', '-') if isinstance(crossfade, str) else str(crossfade)
         export_version_name = "_".join((
             version_name, preset, f"fade-{fade_label}")).removeprefix('_')
-        # TODO: Get the output path first and check that it is can be written to,
-        # before generating the audio.
+        # TODO: Get the output path first and check that it is can be
+        # written to, before generating the audio.
         try:
             exported = song.save_audio(
                 audio=song.apply_effects(),
@@ -330,6 +342,7 @@ def main() -> None:
                 preset=preset_name,
                 version_name=version_name
             )
+
 
 if __name__ == '__main__':
     main()

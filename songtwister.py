@@ -1,5 +1,5 @@
 import random
-from typing import Optional
+from typing import Optional, Union
 from pathlib import Path
 from collections import namedtuple
 import logging
@@ -13,29 +13,30 @@ logger = logging.getLogger("songtwister")
 
 ExportResult = namedtuple("ExportResult", ["filename", "peaks"])
 
+
 class SongTwister:
     def __init__(self,
                  filename: str,
                  bpm: int | float,
-                 title: Optional[str]=None,  # The filename without extension, if not defined
-                 format: Optional[str]=None,  # file format, taken from the file extension
-                 stem_filepath: Optional[str]=None,  # path of file, without extension
-                 audio_length_ms: Optional[int | float]=None,
-                 prefix_length_ms: int=0,  # Number of ms before the beat or metered part of the song starts
-                 suffix_length_ms: int=0,  # Number of ms after the last bar of the song (to be manipulated)
-                 load_audio: bool=True,
-                 bar_sequence: Optional[list]=None,
+                 title: Optional[str] = None,  # The filename without extension, if not defined
+                 format: Optional[str] = None,  # file format, taken from the file extension
+                 stem_filepath: Optional[str] = None,  # path of file, without extension
+                 audio_length_ms: Optional[int | float] = None,
+                 prefix_length_ms: int = 0,  # Number of ms before the beat or metered part of the song starts
+                 suffix_length_ms: int = 0,  # Number of ms after the last bar of the song (to be manipulated)
+                 load_audio: bool = True,
+                 bar_sequence: Optional[list] = None,
                  peaks=None,
-                 waveform_resolution: int=400,
-                 beats_per_bar: int=4,
-                 beat_length_ms: Optional[int]=None,
-                 bar_length_ms: Optional[int]=None,
-                 crossfade: int | str=15,
-                 crossfade_before: bool=True,
-                 crossfade_after: bool=True,
-                 bitrate: Optional[int]=None,
-                 fade_out: Optional[int | float]=None,
-                 prefix_silence_threshold: float=-30.0,
+                 waveform_resolution: int = 400,
+                 beats_per_bar: int = 4,
+                 beat_length_ms: Optional[int] = None,
+                 bar_length_ms: Optional[int] = None,
+                 crossfade: int | str = 15,
+                 crossfade_before: bool = True,
+                 crossfade_after: bool = True,
+                 bitrate: Optional[int] = None,
+                 fade_out: Optional[int | float] = None,
+                 prefix_silence_threshold: float = -30.0,
                  **kwargs):
         """Most of the values will rarely be supplied manually when instantiating.
         The mostly exist to be able to export the object state to json and the create
@@ -63,7 +64,7 @@ class SongTwister:
         self.prefix_length_ms = prefix_length_ms
         self.suffix_length_ms = suffix_length_ms
         self.bar_sequence = bar_sequence or []
-        
+
         self.beat_length_ms = beat_length_ms or self._get_beat_length()
         self.bar_length_ms = bar_length_ms or self._get_bar_length()
         if isinstance(crossfade, (int, float)):
@@ -78,7 +79,6 @@ class SongTwister:
             self.crossfade = 0
         self.crossfade_before = crossfade_before
         self.crossfade_after = crossfade_after
-
 
     def __repr__(self) -> str:
         return (f"SongTwister: {self.title if self.title else self.filename} "
@@ -95,7 +95,6 @@ class SongTwister:
         if not self.title:
             self.title = self.stem_filepath.split('/')[-1]
 
-
     def _get_beat_length(self) -> float:
         """Calculate the length of a beat, from the bpm and
         the number of beats per bar."""
@@ -104,21 +103,18 @@ class SongTwister:
         # Don't convert this to int
         return milliseconds_per_beat
 
-
     def _get_bar_length(self) -> float:
         """Calculate the length of a bar in ms, from the beat length
         and the number of beats per bar."""
         return self.beat_length_ms * self.beats_per_bar
 
-
-    def _get_random_id(self, prefix: str='') -> str:
+    def _get_random_id(self, prefix: str = '') -> str:
         """Generate a random id number, with an optional prefix"""
         return f"{prefix}#{str(random.randint(100, 999))}"
 
-
-    def _calculate_peaks(self, audio: Optional[AudioSegment]=None,
-                         waveform_resolution: Optional[int]=None,
-                         db_ceiling: int=100) -> list[int]:
+    def _calculate_peaks(self, audio: Optional[AudioSegment] = None,
+                         waveform_resolution: Optional[int] = None,
+                         db_ceiling: int = 100) -> list[int]:
         """Get a list of audio level peaks."""
         if not audio:
             audio = self.audio
@@ -135,7 +131,6 @@ class SongTwister:
         return [int((loudness / max_rms) * db_ceiling)
                 for loudness in loudness_of_chunks]
 
-
     @staticmethod
     def perform_selection(items: list[int], criteria) -> list[int]:
         """Select certain items from a list of ints.
@@ -150,7 +145,7 @@ class SongTwister:
         'all' or True selects all items.
         'random X' selects X random items. No number results in a random number of random items.
         'every X of Y' selects item X in each batch of Y, for as many batches as can be made.
-        
+
         """
         # First some cleanup
 
@@ -183,7 +178,7 @@ class SongTwister:
         if criteria == 'odd':
             # Return odd numbered bars
             return [item for item in items if item % 2]
-        
+
         if criteria == 'first':
             # return a list containing the first item, if any
             return [items[0]] if items else []
@@ -280,7 +275,7 @@ class SongTwister:
 
         if isinstance(criteria, (list, tuple)):
             # Return specific items from the list.
-            # May be a list of ints or ranges or a single one 
+            # May be a list of ints or ranges or a single one
             # (converted to a list above).
             # Ranges are turned into individual integers.
             selection = []
@@ -299,8 +294,8 @@ class SongTwister:
         return []
 
     @staticmethod
-    def perform_single_selection(
-        selector: str, current: int, first: int, last: int) -> Optional[int]:
+    def perform_single_selection(selector: str, current: int, first: int,
+                                 last: int) -> Optional[int]:
         """Select an int.
             - 'this' selects the current beat or bar number
             - 'next' and 'previous' selects the one before or after
@@ -333,10 +328,9 @@ class SongTwister:
             if current == last:
                 return
             selected = current + 1
-        # TODO: Add support for next_n (eg. next_1, next_3) - 
+        # TODO: Add support for next_n (eg. next_1, next_3) -
         # and the same for previous_n
         return selected
-
 
     # PUBLIC METHODS
     def load_audio(self) -> None:
@@ -398,17 +392,17 @@ class SongTwister:
             audio=excerpt, version_name=version_name,
             waveform_resolution=waveform_resolution)
 
-
     def save_bar(self, bar_number: int, waveform_resolution: Optional[int]=None):
         """Save a specific bar to file, given the bar number."""
         try:
             bar = self.get_single_bar(bar_number)
             return self.save_excerpt(
-                start=bar.get('start'), end=bar.get('end'),
-                name=f"bar-{bar_number}", waveform_resolution=waveform_resolution)
+                start=bar.get('start'),
+                end=bar.get('end'),
+                name=f"bar-{bar_number}",
+                waveform_resolution=waveform_resolution)
         except KeyError as e:
-            logger.error("Could not find bar number %S", bar_number)
-
+            logger.error("Could not find bar number %s. %s", bar_number, e)
 
     def export_state(self) -> dict:
         """Return a dict of all self vars, except the AudioSegment."""
@@ -418,7 +412,6 @@ class SongTwister:
         all_vars.update(additional_data)
         return all_vars
 
-
     def set_new_tempo(self, bpm: float | int) -> None:
         """Change the bpm setting and update derived properties."""
         if not bpm or not isinstance(bpm, (int, float)):
@@ -427,7 +420,6 @@ class SongTwister:
         self.beat_length_ms = self._get_beat_length()
         self.bar_length_ms = self._get_bar_length()
         self.build_bar_sequence()
-
 
     def build_bar_sequence(self) -> None:
         """Create a list of dicts, representing each bar in the song.
@@ -467,8 +459,7 @@ class SongTwister:
         # Each dict should be like this:
         # {'number': int, 'start': int | float, 'end': int | float}
 
-
-    def get_bars(self, selection, bars: Optional[list]=None) -> list[dict]:
+    def get_bars(self, selection, bars: Optional[list] = None) -> list[dict]:
         """Extract a selection of bars from a list, or from
         the main bar sequence.
         See the general documentation on making selections to
@@ -488,14 +479,12 @@ class SongTwister:
                 selection, len(bars))
         return bars
 
-
     def get_single_bar(self, number: int) -> dict:
         """Get a bar dict by its bar number"""
         bars = self.get_bars(number)
         if not bars:
             raise KeyError
         return bars[0]
-
 
     def detect_prefix(self) -> int:
         """Guess the length of the prefix, before the song proper starts,
@@ -505,10 +494,9 @@ class SongTwister:
         return pd_silence.detect_leading_silence(
             self.audio, silence_threshold=self.prefix_silence_threshold)
 
-
     def set_prefix_and_suffix(
-            self, prefix_length_ms: Optional[int | float]=None,
-            suffix_length_ms : Optional[int | float]=None) -> None:
+            self, prefix_length_ms: Optional[int | float] = None,
+            suffix_length_ms: Optional[int | float] = None) -> None:
         """Reset prefix and suffix lengths in ms.
         Causes bar sequence to be rebuilt."""
         if prefix_length_ms is not None and isinstance(
@@ -518,7 +506,6 @@ class SongTwister:
             suffix_length_ms, (int, float)):
             self.suffix_length_ms = suffix_length_ms
         self.build_bar_sequence()  # Build or rebuild
-
 
     def get_prefix(self) -> AudioSegment:
         """Get the prefix -- the chunk of audio leading up to
@@ -530,7 +517,6 @@ class SongTwister:
         prefix_end = max(0, self.prefix_length_ms - 1)
         return self.audio[:prefix_end]
 
-
     def get_suffix(self) -> AudioSegment:
         """Get the trailing AudioSegment, after all the processable bars.
         If there is nothing, an empty AudioSegment is returned.
@@ -541,10 +527,9 @@ class SongTwister:
             # If there is a bar sequence, but no suffix, it is assumed that the song does not have one
             if self.bar_sequence:
                 return AudioSegment.empty()
-            else:             
+            else:
                 self.build_bar_sequence()
         return self.audio[self.suffix_length_ms:]
-
 
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.
@@ -567,13 +552,14 @@ class SongTwister:
                 bar['section'] = name
                 self.bar_sequence[index] = bar
 
-
-    def get_section(self, name: str, joined: bool=False) -> dict:
+    def get_section(self, name: str, joined: bool = False) -> dict:
         """TODO: This has not been used yet, and may not work properly."""
         if not self.bar_sequence:
             self.build_bar_sequence()
         name = name.lower()
-        section = [bar for bar in self.bar_sequence if bar.get('section', '').lower() == name]
+        section = [
+            bar for bar in self.bar_sequence
+            if bar.get('section', '').lower() == name]
         if joined:
             return {
                 'section': name,
@@ -582,10 +568,9 @@ class SongTwister:
             }
         return section
 
-
-    def add_effect(self, effect: str='remove', beats: str='last',
-                   bars: str='all', section: Optional[str]=None,
-                   beats_per_bar: Optional[int]=None, **kwargs) -> None:
+    def add_effect(self, effect: str = 'remove', beats: str = 'last',
+                   bars: str = 'all', section: Optional[str] = None,
+                   beats_per_bar: Optional[int] = None, **kwargs) -> None:
         """Add an effect to any beats in any bars - default: remove.
         Select a number of bars - default: all.
         If a section is supplied, only bars within this are selected.
@@ -648,7 +633,7 @@ class SongTwister:
                 # Number of new beats to get an old beat
                 beat_length = int(new_number_of_beats / resolution)
                 effect['resolution'] = new_number_of_beats
-                
+
                 old_beat_number = effect.get('number')
                 # To get the start position of the beat with a higher resolution,
                 # calculate the number of new beats in the beats up to the selected beat,
@@ -660,7 +645,7 @@ class SongTwister:
                     new_effect = {k: v for k, v in effect.items()}
                     new_effect['number'] = new_beat
                     new_effects.append(new_effect)
-            
+
             new_beat_length = self.bar_length_ms / new_number_of_beats
             beat_map = {}
             for effect in new_effects:
@@ -668,7 +653,7 @@ class SongTwister:
                 if number not in beat_map:
                     beat_map[number] = {
                         'number': number,
-                        'start': bar.get('start') + (new_beat_length * (number -1)),
+                        'start': bar.get('start') + (new_beat_length * (number - 1)),
                         'end': bar.get('start') + (new_beat_length * number),
                         'resolution': effect.get('resolution'),
                         'effects': []
@@ -688,9 +673,9 @@ class SongTwister:
             # Other effects are all applied
         return sequence
 
-    def _effect_speedup(self, audio: AudioSegment, speed: float | int=2,
-                        crossfade: int=150, chunk_size: int=150,
-                        chop_to_length: Optional[str | bool]=None) -> AudioSegment:
+    def _effect_speedup(self, audio: AudioSegment, speed: float | int = 2,
+                        crossfade: int = 150, chunk_size: int = 150,
+                        chop_to_length: Optional[str | bool] = None) -> AudioSegment:
         if float(speed) == 1.0:
             return audio
         if len(audio) < 1000:
@@ -719,20 +704,19 @@ class SongTwister:
                     # about 1-2 ms, so we accept it for now.
         return sped_up_audio
 
-    def _effect_speed_change(
-            self, audio: AudioSegment, speed: float | int=1.0) -> AudioSegment:
+    def _effect_speed_change(self, audio: AudioSegment,
+                             speed: float | int = 1.0) -> AudioSegment:
         if float(speed) == 1.0:
             return audio
         # Manually override the frame_rate.
-        audio_with_altered_frame_rate = audio._spawn(audio.raw_data, overrides={
-            "frame_rate": int(audio.frame_rate * speed)
-        })
+        audio_with_altered_frame_rate = audio._spawn(
+            audio.raw_data, overrides={
+                "frame_rate": int(audio.frame_rate * speed)})
         # Convert the sound with altered frame rate to a standard frame rate
         return audio_with_altered_frame_rate.set_frame_rate(audio.frame_rate)
 
-
-    def _get_effect(self, name: str, effects: list,
-                    fallback: int=1, get_float: bool=False):
+    def _get_effect(self, name: str, effects: list, fallback: int = 1,
+                    get_float: bool = False) -> Optional[tuple]:
         matches = [effect for effect in effects if effect.startswith(name)]
         if not matches:
             return
@@ -759,7 +743,7 @@ class SongTwister:
             logger.warning("No effects to apply - returning original audio.")
             return self.audio
 
-        joined_audio = AudioSegment.empty()        
+        joined_audio = AudioSegment.empty()
         end_of_last_cut = 0  # ms index in audio where last cut point ended
         # We don't just take values(), so we can sort by the key
         for current_bar_number, bar in sorted(effect_map.items()):
@@ -811,7 +795,7 @@ class SongTwister:
                 # Could we just append a piece of audio from the beginning of section B with
                 # the length of the crossfade to the end of section A (the joined_audio),
                 # without crossfade, and then do a crossfade between A and B?
-                
+
                 end_of_last_cut = end_time
                 if 'remove' in beat_effects:
                     # When removing, we skip the rest of the effects processing, including
@@ -893,12 +877,12 @@ class SongTwister:
                             beat_audio = target_audio
                         else:
                             # FIXME support crossfade?
-                            beat_audio = beat_audio.append(target_audio, crossfade=0)
+                            beat_audio = beat_audio.append(
+                                target_audio, crossfade=0)
                         beat_length = len(beat_audio)
 
-
-
-                    speed = self._get_effect('speed', beat_effects, get_float=True)
+                    speed = self._get_effect(
+                        'speed', beat_effects, get_float=True)
                     if speed:
                         # We will only apply one speed change effect at a time.
                         # Take the last applied
@@ -914,7 +898,9 @@ class SongTwister:
 
                         if 'speedup' in speed_change_type and speed_rate >= 1:
                             beat_audio = self._effect_speedup(
-                                audio=beat_audio, speed=speed_rate, chop_to_length='x')
+                                audio=beat_audio,
+                                speed=speed_rate,
+                                chop_to_length='x')
                         else:
                             beat_audio = self._effect_speed_change(
                                 audio=beat_audio, speed=speed_rate)
@@ -924,7 +910,7 @@ class SongTwister:
                         # We will only apply one speed change effect at a time.
                         # Take the last applied
                         pitch_change, pitch_semitones = pitch
-                        
+
                         # NOTE: we only support downpitching currently, and barely that
                         if pitch_change == 'pitchdown':
                             step = (1/12) * pitch_semitones

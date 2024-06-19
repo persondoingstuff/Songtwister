@@ -531,6 +531,35 @@ class SongTwister:
                 self.build_bar_sequence()
         return self.audio[self.suffix_length_ms:]
 
+    def make_loop(self, selection: Union[str, int], duration, keep_prefix=False, fade_out=None):
+        def is_time(value):
+            return isinstance(value, str) and ':' in value and all(
+                [x.isnumeric() for x in value.split(':')])
+
+        if isinstance(selection, int):  # A specific bar number
+            start = selection
+            end = selection
+            time = True
+        elif '-' in selection:  # A range of bars or timecodes
+            selection_parts = selection.split('-')
+            # Select the smallest part and make it an int
+            start = int(min(selection_parts).strip())
+            # Select the largest part, make it an int and make sure that it
+            # is not larger than the total number of bars in the song
+            end = min(int(max(selection_parts).strip()),
+                      self.get_single_bar('last').get('number'))
+            time = is_time(start) and is_time(end)
+        
+        if time:
+            pass
+        else:
+            start_time = self.get_single_bar(start).get('start')
+            end_time = self.get_single_bar(end).get('end')
+            bar_count = end - start
+            selected_audio = self.audio[start_time:end_time]
+
+
+
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.
         Create a section of the song that effects can be applied to,

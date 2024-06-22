@@ -4,7 +4,8 @@ from pathlib import Path
 from collections import namedtuple
 import logging
 
-from pydub import AudioSegment
+# from pydub import AudioSegment
+from audiosegment_patch import PatchedAudioSegment as AudioSegment
 from pydub import effects as pd_effects
 from pydub import silence as pd_silence
 from pydub.utils import mediainfo

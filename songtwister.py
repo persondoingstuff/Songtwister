@@ -376,8 +376,46 @@ class SongTwister:
             logger.error('Failed to write %s: %s', file_path, e)
             return
         peaks = self._calculate_peaks(audio, waveform_resolution)
+        logger.info("Finished writing file")
         return ExportResult(file_path, peaks)
 
+    def _samples_to_ms(self, samples: int, framerate: Optional[int] = None) -> float:
+        if not framerate:
+            framerate = self.audio.frame_rate
+        return (samples / framerate) * 1000
+
+    def _ms_to_samples(self, ms: Union[int, float],
+                       framerate: Optional[int] = None) -> int:
+        if not framerate:
+            framerate = self.audio.frame_rate
+        return int((ms / 1000) * framerate)
+
+    def slice(self, start: Union[float, int, None] = None,
+              end: Union[float, int, None] = None,
+              audio: Optional[AudioSegment] = None) -> AudioSegment:
+        """Using the standard slice notation a[1:5], an AudioSegment
+        rounds off to whole milliseconds. In many cases this is fine.
+        But when dealing with rhythms in music and you are making many
+        cuts, loosing the sub-millisecond resolution can add up and
+        create offsets in rhythm.
+        So this implements a finegrained slicing on sample level instead."""
+        if start is not None:
+            start_sample = self._ms_to_samples(max(start, 0))
+        else:
+            start_sample = None
+        if end is not None:
+            end_sample = min(self._ms_to_samples(end),
+                             self.audio.frame_count())
+        else:
+            end_sample = None
+        if not audio:
+            audio = self.audio
+        # NOTE: This does not seem to change anything, so it isn't needed after all.
+        return audio[start:end]
+        # mine = audio.get_sample_slice(
+        #     start_sample=start_sample, end_sample=end_sample)
+        # print(start, end, standard.frame_count(), mine.frame_count())
+        # return mine
 
     def save_excerpt(self, start, end, name: Optional[str]=None,
                      waveform_resolution: Optional[int]=None) -> ExportResult:
@@ -386,7 +424,8 @@ class SongTwister:
             self.load_audio()
         if start > self.audio_length_ms or end > self.audio_length_ms:
             raise ValueError("Invalid length", start, end, self.audio_length_ms)
-        excerpt = self.audio[start:end]
+        # excerpt = self.audio[start:end]
+        excerpt = self.slice(start, end)
         version_name = name or self._get_random_id("excerpt")
         return self.save_audio(
             audio=excerpt, version_name=version_name,
@@ -531,11 +570,67 @@ class SongTwister:
                 self.build_bar_sequence()
         return self.audio[self.suffix_length_ms:]
 
-    def make_loop(self, selection: Union[str, int], duration, keep_prefix=False, fade_out=None):
-        def is_time(value):
-            return isinstance(value, str) and ':' in value and all(
-                [x.isnumeric() for x in value.split(':')])
+    def _is_time(value) -> bool:
+        if isinstance(value, str):
+            if ':' in value:
+                if all([x.isnumeric() for x in value.split(':')]):
+                    return True
+            if value.endswith('s'):
+                if value.removesuffix('s').isnumeric():
+                    return True
+        return False
 
+    def _time_to_ms(value: str) -> int:
+        time_parts = value.split(':')
+        if len(time_parts) == 3:
+            hours = int(time_parts[0])
+            minutes = int(time_parts[1])
+            seconds = time_parts[2]
+        elif len(time_parts) == 2:
+            hours = 0
+            minutes = int(time_parts[0])
+            seconds = time_parts[1]
+        elif len(time_parts) == 1 and time_parts[0].endswith('s'):
+            hours = 0
+            minutes = 0
+            seconds = time_parts[0].removesuffix('s')
+        else:
+            raise ValueError(f"Unknown timeformat: {value}")
+        seconds = float(seconds) if '.' in seconds else int(seconds)
+        seconds += (hours * 60 * 60) + (minutes * 60)
+        return seconds * 1000
+
+
+    # PROCESSING
+    def edit_trim(self, start=None, end=None, fade_in=None, fade_out=None, **kwargs) -> AudioSegment:
+        trimmed = self.audio
+        if start:
+            if self._is_time(start):
+                start_trim_length = self._time_to_ms(start)
+            elif start == 'prefix':
+                start_trim_length = self.prefix_length_ms
+            elif isinstance(start, int):
+                start_trim_length = self.get_single_bar(start).get('end')
+            else:
+                raise ValueError(f"Unknown timeformat: {start}")
+            start_trim_length = min(start_trim_length, len(trimmed))
+            trimmed = self.slice(start=start_trim_length)
+        if end:
+            if self._is_time(end):
+                end_trim_length = self._time_to_ms(end)
+            elif start == 'suffix':
+                pass
+                # start_trim_length = self.prefix_length_ms
+            elif isinstance(end, int):
+                pass
+                # start_trim_length = self.get_single_bar(end).get('start')
+            else:
+                raise ValueError(f"Unknown timeformat: {end}")
+            end_trim_length = min(end_trim_length, len(trimmed))
+            trimmed = self.trim(end=end_trim_length)
+        return trimmed
+
+    def make_loop(self, selection: Union[str, int], duration, keep_prefix=False, fade_out=None):
         if isinstance(selection, int):  # A specific bar number
             start = selection
             end = selection
@@ -548,17 +643,15 @@ class SongTwister:
             # is not larger than the total number of bars in the song
             end = min(int(max(selection_parts).strip()),
                       self.get_single_bar('last').get('number'))
-            time = is_time(start) and is_time(end)
+            time = self._is_time(start) and self._is_time(end)
         
         if time:
-            pass
+            raise NotImplementedError
         else:
             start_time = self.get_single_bar(start).get('start')
             end_time = self.get_single_bar(end).get('end')
             bar_count = end - start
-            selected_audio = self.audio[start_time:end_time]
-
-
+            selected_audio = self.slice(start_time, end_time)
 
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.
@@ -795,8 +888,10 @@ class SongTwister:
                 # and the beginning of this new cut. In the first iteration, this is from
                 # the beginning of the song until the first cut begins. Otherwise, it's
                 # the in-between section that we skip, because it doesn't need effects.
-                audio_since_last_cut = self.audio[
-                    end_of_last_cut - before_fade_length:start_time + after_fade_length]
+                # !!audio_since_last_cut = self.audio[
+                #     end_of_last_cut - before_fade_length:start_time + after_fade_length]
+                audio_since_last_cut = self.slice(
+                    end_of_last_cut - before_fade_length, start_time + after_fade_length)
                 # We append the section since the last cut was made to the overall rejoined
                 # song. If this is the first iteration, we append to an empty AS.
                 # We use the crossfade to smoothen the transition, if the last cut made a
@@ -837,8 +932,9 @@ class SongTwister:
                     # Create a silent audiosegment with the duration of this beat
                     beat_audio = AudioSegment.silent(duration=cut_duration)
                 else:
-                    # NOTE: Consider get_sample_slice()
-                    beat_audio = self.audio[start_time:end_time]
+                    # NOTE: Consider get_sample_slice() !!
+                    # beat_audio = self.audio[start_time:end_time]
+                    beat_audio = self.slice(start_time, end_time)
                     beat_length = len(beat_audio)
 
                     # if 'insert' or 'replace' are in effects we need to find and extract a piece of audio from the full song audio.
@@ -900,7 +996,8 @@ class SongTwister:
                         target_start_time = target_bar_start + (target_beat_length * (selected_insert_beat - 1))
                         target_end_time = target_start_time + target_beat_length
                         # Cut out the audio
-                        target_audio = self.audio[target_start_time:target_end_time]
+                        # !!target_audio = self.audio[target_start_time:target_end_time]
+                        target_audio = self.slice(target_start_time, target_end_time)
                         # Extend or replace beat audio
                         if insert_type == 'replace':
                             beat_audio = target_audio
@@ -923,7 +1020,8 @@ class SongTwister:
                         if 'fill' in speed_change_type and speed_rate >= 1:
                             new_length = beat_length * speed_rate
                             end_time = start_time + new_length
-                            beat_audio = self.audio[start_time:end_time]
+                            # !!beat_audio = self.audio[start_time:end_time]
+                            beat_audio = self.slice(start_time, end_time)
 
                         if 'speedup' in speed_change_type and speed_rate >= 1:
                             beat_audio = self._effect_speedup(

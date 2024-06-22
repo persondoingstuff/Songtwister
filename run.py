@@ -35,9 +35,13 @@ def guess_prefix_length(song_object: SongTwister, export_prefix=False,
         if not result:
             return
         filename, peaks = result
+        if isinstance(filename, str):
+            file = filename.split('/')[-1]
+        elif isinstance(filename, Path):
+            file = filename.name
         sections.append({
             'title': f'Bar {bar_number}',
-            'file': filename.split('/')[-1],
+            'file': file,
             'waveform': peaks
         })
     html_file = f"{song_object.stem_filepath}_prefix-test.html"
@@ -326,8 +330,11 @@ def main() -> None:
         # TODO: Get the output path first and check that it is can be
         # written to, before generating the audio.
         try:
+            logger.info("Cutting")
+            edited_audio = song.apply_effects()
+            logger.info("Finished cutting")
             exported = song.save_audio(
-                audio=song.apply_effects(),
+                audio=edited_audio,
                 version_name=export_version_name,
                 overwrite=overwrite
             )

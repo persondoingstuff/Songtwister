@@ -859,6 +859,7 @@ class SongTwister:
         """Effects are first added to a mapping, allowing them to be
         added one at a time. This generates an AudioSegment with the
         effects applied."""
+        logger.info("Applying effects")
         if not self.audio:
             self.load_audio()
         effect_map = self._prepare_effects()
@@ -1135,4 +1136,5 @@ class SongTwister:
                 joined_audio = joined_audio.append(
                     beat_audio,
                     crossfade=min(fade_length, len(beat_audio)))
+        logger.info("Finished applying effects")
         return joined_audio

@@ -65,16 +65,21 @@ class PatchedAudioSegment(AudioSegment):
         xf = seg1[-crossfade:].fade(to_gain=-120, start=0, end=float('inf'))
         xf *= seg2[:crossfade].fade(from_gain=-120, start=0, end=float('inf'))
 
-        output = BytesIO()
+        # This is the code in the pydub repo:
+        # output = BytesIO()
 
-        output.write(seg1[:-crossfade]._data)
-        output.write(xf._data)
-        output.write(seg2[crossfade:]._data)
+        # output.write(seg1[:-crossfade]._data)
+        # output.write(xf._data)
+        # output.write(seg2[crossfade:]._data)
 
-        output.seek(0)
-        obj = seg1._spawn(data=output)
-        output.close()
-        return obj
+        # output.seek(0)
+        # obj = seg1._spawn(data=output)
+        # output.close()
+        # return obj
+
+        # This is another approach that seems to be faster:
+        return seg1._spawn(data=[
+            seg1[:-crossfade]._data, xf._data, seg2[crossfade:]._data])
 
     def export(self, out_f=None, format='mp3', codec=None, bitrate=None, parameters=None, tags=None, id3v2_version='4',
                cover=None):

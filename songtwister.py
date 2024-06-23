@@ -1,5 +1,5 @@
 import random
-from typing import Optional, Union
+from typing import Optional, Union, Self
 from pathlib import Path
 from collections import namedtuple
 import logging
@@ -25,6 +25,7 @@ class SongTwister:
                  audio_length_ms: Optional[int | float] = None,
                  prefix_length_ms: int = 0,  # Number of ms before the beat or metered part of the song starts
                  suffix_length_ms: int = 0,  # Number of ms after the last bar of the song (to be manipulated)
+                 audio: Optional[AudioSegment] = None,
                  load_audio: bool = True,
                  bar_sequence: Optional[list] = None,
                  peaks=None,
@@ -54,8 +55,8 @@ class SongTwister:
 
         self.audio_length_ms = audio_length_ms
         self.waveform_resolution = waveform_resolution
-        self.audio = None
-        if load_audio:
+        self.audio = audio
+        if not self.audio and load_audio:
             self.load_audio()
 
         self.bitrate = bitrate or mediainfo(self.filename).get('bit_rate')
@@ -68,16 +69,8 @@ class SongTwister:
 
         self.beat_length_ms = beat_length_ms or self._get_beat_length()
         self.bar_length_ms = bar_length_ms or self._get_bar_length()
-        if isinstance(crossfade, (int, float)):
-            self.crossfade = crossfade
-        # crossfade may be given as a note length, eg. 1/16.
-        # In this case, it must be a string and must be one fraction of
-        # a bar. It does not have to be note lengths -- 1/24 is valid.
-        elif isinstance(crossfade, str) and crossfade.startswith('1/'):
-            crossfade_beats = int(crossfade.removeprefix('1/'))
-            self.crossfade = int(self.bar_length_ms / crossfade_beats)
-        else:
-            self.crossfade = 0
+        self.crossfade = 0
+        self.set_crossfade(crossfade)
         self.crossfade_before = crossfade_before
         self.crossfade_after = crossfade_after
 
@@ -96,6 +89,18 @@ class SongTwister:
         if not self.title:
             self.title = self.stem_filepath.split('/')[-1]
 
+    def set_crossfade(self, crossfade: Union[int, str, float]) -> None:
+        if isinstance(crossfade, (int, float)):
+            self.crossfade = crossfade
+        # crossfade may be given as a note length, eg. 1/16.
+        # In this case, it must be a string and must be one fraction of
+        # a bar. It does not have to be note lengths -- 1/24 is valid.
+        elif isinstance(crossfade, str) and crossfade.startswith('1/'):
+            crossfade_beats = int(crossfade.removeprefix('1/'))
+            self.crossfade = int(self.bar_length_ms / crossfade_beats)
+        else:
+            self.crossfade = 0
+
     def _get_beat_length(self) -> float:
         """Calculate the length of a beat, from the bpm and
         the number of beats per bar."""
@@ -109,7 +114,8 @@ class SongTwister:
         and the number of beats per bar."""
         return self.beat_length_ms * self.beats_per_bar
 
-    def _get_random_id(self, prefix: str = '') -> str:
+    @staticmethod
+    def _get_random_id(prefix: str = '') -> str:
         """Generate a random id number, with an optional prefix"""
         return f"{prefix}#{str(random.randint(100, 999))}"
 
@@ -131,6 +137,11 @@ class SongTwister:
 
         return [int((loudness / max_rms) * db_ceiling)
                 for loudness in loudness_of_chunks]
+
+    @staticmethod
+    def _is_int(value: Union[int, str]) -> bool:
+        return isinstance(value, int) or (
+            isinstance(value, str) and value.isnumeric())
 
     @staticmethod
     def perform_selection(items: list[int], criteria) -> list[int]:
@@ -157,6 +168,8 @@ class SongTwister:
         # Make sure that strings are lower for easier comparison
         if isinstance(criteria, str):
             criteria = criteria.lower()
+            if criteria.isnumeric():
+                criteria = int(criteria)
 
         # Make sure that criteria is iterable
         if isinstance(criteria, (int, range)):
@@ -340,12 +353,12 @@ class SongTwister:
             file=self.filename, format=self.format)
         self.audio_length_ms = len(self.audio)
 
-    def save_audio(self, audio: AudioSegment,
-                   output_dir: Optional[str | Path]=None,
-                   output_format: Optional[str]=None,
-                   overwrite: bool=False,
-                   version_name: Optional[str]=None,
-                   waveform_resolution: Optional[int]=None) -> ExportResult:
+    def save_audio(self, audio: Optional[AudioSegment] = None,
+                   output_dir: Optional[str | Path] = None,
+                   output_format: Optional[str] = None,
+                   overwrite: bool = False,
+                   version_name: Optional[str] = None,
+                   waveform_resolution: Optional[int] = None) -> ExportResult:
         """Write an AudioSegment to a file. To prevent overwriting the original,
         if no version_name is passed, a random one is generated."""
         if not version_name:
@@ -367,6 +380,8 @@ class SongTwister:
         if not overwrite and file_path.exists():
             raise FileExistsError(f"Cannot write {file_path}, as it already "
                                   "exists and overwriting is not enabled.")
+        if not audio:
+            audio = self.audio
         if self.fade_out:
             audio = audio.fade_out(self.fade_out * 1000)
         logger.info("Writing file: %s", file_path)
@@ -412,11 +427,10 @@ class SongTwister:
         if not audio:
             audio = self.audio
         # NOTE: This does not seem to change anything, so it isn't needed after all.
-        return audio[start:end]
-        # mine = audio.get_sample_slice(
-        #     start_sample=start_sample, end_sample=end_sample)
-        # print(start, end, standard.frame_count(), mine.frame_count())
-        # return mine
+        # return audio[start:end]
+        mine = audio.get_sample_slice(
+            start_sample=start_sample, end_sample=end_sample)
+        return mine
 
     def save_excerpt(self, start, end, name: Optional[str]=None,
                      waveform_resolution: Optional[int]=None) -> ExportResult:
@@ -446,7 +460,8 @@ class SongTwister:
 
     def export_state(self) -> dict:
         """Return a dict of all self vars, except the AudioSegment."""
-        all_vars: dict = vars(self)
+        # If we just do vars(self), we modify self in the following lines
+        all_vars = dict(vars(self))
         all_vars.pop('audio')
         additional_data = all_vars.pop('additional_data')
         all_vars.update(additional_data)
@@ -569,8 +584,9 @@ class SongTwister:
                 return AudioSegment.empty()
             else:
                 self.build_bar_sequence()
-        return self.audio[self.suffix_length_ms:]
+        return self.audio[len(self.audio) - self.suffix_length_ms:]
 
+    @staticmethod
     def _is_time(value) -> bool:
         if isinstance(value, str):
             if ':' in value:
@@ -581,6 +597,7 @@ class SongTwister:
                     return True
         return False
 
+    @staticmethod
     def _time_to_ms(value: str) -> int:
         time_parts = value.split(':')
         if len(time_parts) == 3:
@@ -601,58 +618,144 @@ class SongTwister:
         seconds += (hours * 60 * 60) + (minutes * 60)
         return seconds * 1000
 
+    def spawn_with_new_audio(self, new_audio: AudioSegment, **kwargs):
+        state = self.export_state()
+        state['audio'] = new_audio
+        state['audio_length_ms'] = len(new_audio)
+        state.update(**kwargs)
+        state.pop('bar_sequence', None)
+        return self.__class__(**state)
 
     # PROCESSING
-    def edit_trim(self, start=None, end=None, fade_in=None, fade_out=None, **kwargs) -> AudioSegment:
-        trimmed = self.audio
+    def edit(self, edit_list: list) -> Self:
+        edit_index = {
+            'trim': 'edit_trim',
+            'keep': 'edit_keep',
+            'loop': 'edit_loop',
+            'fade': 'edit_fade',
+        }
+        edited = self
+        for edit_item in edit_list:
+            if 'do' not in edit_item:
+                logger.error("Invalid edit: %s", edit_item)
+                continue
+            logger.info("Edit: %s", edit_item.get('do'))
+            edit_function_name = edit_index.get(edit_item.pop('do'))
+            if not edit_function_name:
+                logger.error("Invalid edit action: %s", edit_function_name)
+                continue
+            edited = getattr(edited, edit_function_name)(**edit_item)
+        return edited
+
+    def edit_trim(self, start=None, end=None, keep_prefix=False, keep_suffix=False, **kwargs) -> Self:
+        # TODO Support cutting at silence
+        # TODO This could be DRYer
+        prefix = self.get_prefix() if keep_prefix else AudioSegment.empty()
+        suffix = self.get_suffix() if keep_suffix else AudioSegment.empty()
+        edited = self.audio
+        updated_attrs = {}
+        if not self.bar_sequence:
+            self.build_bar_sequence()
         if start:
             if self._is_time(start):
                 start_trim_length = self._time_to_ms(start)
             elif start == 'prefix':
                 start_trim_length = self.prefix_length_ms
-            elif isinstance(start, int):
+                if not prefix:
+                    updated_attrs['prefix_length_ms'] = 0
+            elif self._is_int(start):
                 start_trim_length = self.get_single_bar(start).get('end')
             else:
                 raise ValueError(f"Unknown timeformat: {start}")
-            start_trim_length = min(start_trim_length, len(trimmed))
-            trimmed = self.slice(start=start_trim_length)
+            start_trim_length = min(start_trim_length, len(edited))
+            logger.info("Trimming %s from start", start_trim_length)
+            edited = self.slice(start=start_trim_length, audio=edited)
         if end:
             if self._is_time(end):
                 end_trim_length = self._time_to_ms(end)
-            elif start == 'suffix':
-                pass
-                # start_trim_length = self.prefix_length_ms
-            elif isinstance(end, int):
-                pass
-                # start_trim_length = self.get_single_bar(end).get('start')
+            elif end == 'suffix':
+                end_trim_length = self.suffix_length_ms
+                if not keep_suffix:
+                    updated_attrs['suffix_length_ms'] = 0
+            elif self._is_int(end):
+                last_bar_number = self.get_single_bar('last').get('number')
+                target_bar = self.get_single_bar(last_bar_number - (int(end) - 1))
+                end_trim_length = target_bar.get('start')
             else:
                 raise ValueError(f"Unknown timeformat: {end}")
-            end_trim_length = min(end_trim_length, len(trimmed))
-            trimmed = self.trim(end=end_trim_length)
-        return trimmed
+            end_trim_length = min(end_trim_length, len(edited))
+            logger.info("Trimming %s from end", end_trim_length)
+            edited = self.slice(end=end_trim_length, audio=edited)
+        logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
+        print(len(prefix), len(edited), len(suffix))
+        return self.spawn_with_new_audio(prefix + edited + suffix, **updated_attrs)
 
-    def make_loop(self, selection: Union[str, int], duration, keep_prefix=False, fade_out=None):
-        if isinstance(selection, int):  # A specific bar number
-            start = selection
-            end = selection
-            time = True
-        elif '-' in selection:  # A range of bars or timecodes
-            selection_parts = selection.split('-')
-            # Select the smallest part and make it an int
-            start = int(min(selection_parts).strip())
-            # Select the largest part, make it an int and make sure that it
-            # is not larger than the total number of bars in the song
-            end = min(int(max(selection_parts).strip()),
-                      self.get_single_bar('last').get('number'))
-            time = self._is_time(start) and self._is_time(end)
-        
-        if time:
-            raise NotImplementedError
+    def edit_keep(self, start, end, **kwargs) -> Self:
+        edited = self.audio
+        if not self.bar_sequence:
+            self.build_bar_sequence()
+
+        if self._is_time(start):
+            start_position = self._time_to_ms(start)
+        elif self._is_int(start):
+            start_position = self.get_single_bar(start).get('start')
         else:
-            start_time = self.get_single_bar(start).get('start')
-            end_time = self.get_single_bar(end).get('end')
-            bar_count = end - start
-            selected_audio = self.slice(start_time, end_time)
+            raise ValueError(f"Unknown timeformat: {start}")
+
+        if self._is_time(end):
+            end_position = self._time_to_ms(end)
+        elif self._is_int(end):
+            end_position = self.get_single_bar(end).get('end')
+        else:
+            raise ValueError(f"Unknown timeformat: {end}")
+
+        logger.info("Keeping from %s to %s", start_position, end_position)
+        edited = self.slice(start=start_position, end=end_position, audio=edited)
+        logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
+        return self.spawn_with_new_audio(edited)
+
+    def edit_loop(self, times=None, duration=None, keep_prefix=False, keep_suffix=False) -> Self:
+        # TODO: Allow min and max directives to duration
+        prefix = self.get_prefix() if keep_prefix else AudioSegment.empty()
+        suffix = self.get_suffix() if keep_suffix else AudioSegment.empty()
+        edited = self.audio
+        if times and self._is_int(times):
+            logger.info("Looping %s times", times)
+            edited = edited * times
+        elif duration:
+            duration_ms = self._time_to_ms(duration)
+            logger.info("Looping for %s (%s ms)", duration, duration_ms)
+            if duration_ms < len(edited):
+                edited = edited[duration_ms:]
+            else:
+                times = int(duration_ms / len(edited)) + 1
+                edited = edited * times
+                edited = edited[:duration_ms]
+        return self.spawn_with_new_audio(prefix + edited + suffix)
+
+    def edit_fade(self, fade_in=None, fade_out=None) -> Self:
+        edited = self.audio
+        if fade_in:
+            if self._is_time(fade_in):
+                fade_in_ms = self._time_to_ms(fade_in)
+            elif self._is_int(fade_in):
+                fade_in_ms = self.bar_length_ms * fade_in
+            else:
+                raise ValueError(f"Unknown timeformat: {fade_in}")
+            fade_in_ms = min(fade_in_ms, len(edited))
+            logger.info("Fading in for %s", fade_in_ms)
+            edited = edited.fade_in(int(fade_in_ms))
+        if fade_out:
+            if self._is_time(fade_out):
+                fade_out_ms = self._time_to_ms(fade_out)
+            elif self._is_int(fade_out):
+                fade_out_ms = self.bar_length_ms * fade_out
+            else:
+                raise ValueError(f"Unknown timeformat: {fade_out}")
+            fade_out_ms = min(fade_out_ms, len(edited))
+            logger.info("Fading out for %s", fade_out_ms)
+            edited = edited.fade_out(int(fade_out_ms))
+        return self.spawn_with_new_audio(edited)
 
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.

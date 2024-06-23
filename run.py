@@ -293,6 +293,10 @@ def main() -> None:
         if crossfade.isnumeric():
             crossfade = int(crossfade)
 
+    song = SongTwister(**song_data)
+    if 'edit' in song_data:
+        song = song.edit(song_data.get('edit'))
+
     logger.info("Presets that will be applied: %s",
                 ', '.join(presets_to_apply))
     for preset in presets_to_apply:
@@ -307,9 +311,8 @@ def main() -> None:
         # If the preset does not have a crossfade defined, we use the default
         if crossfade is None:
             crossfade = preferences_config.get('crossfade')
-        song_data['crossfade'] = crossfade
+        song.set_crossfade(crossfade)
 
-        song = SongTwister(**song_data)
         logger.info(
             "Processing '%s' using the preset %s and a crossfade of %s",
             song.title, preset, crossfade)

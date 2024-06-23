@@ -458,11 +458,12 @@ class SongTwister:
         except KeyError as e:
             logger.error("Could not find bar number %s. %s", bar_number, e)
 
-    def export_state(self) -> dict:
+    def export_state(self, keep_audio=False) -> dict:
         """Return a dict of all self vars, except the AudioSegment."""
         # If we just do vars(self), we modify self in the following lines
         all_vars = dict(vars(self))
-        all_vars.pop('audio')
+        if not keep_audio:
+            all_vars.pop('audio')
         additional_data = all_vars.pop('additional_data')
         all_vars.update(additional_data)
         return all_vars
@@ -618,12 +619,15 @@ class SongTwister:
         seconds += (hours * 60 * 60) + (minutes * 60)
         return seconds * 1000
 
-    def spawn_with_new_audio(self, new_audio: AudioSegment, **kwargs):
-        state = self.export_state()
-        state['audio'] = new_audio
-        state['audio_length_ms'] = len(new_audio)
+    def spawn_new_instance(self, new_audio: Optional[AudioSegment] = None, **kwargs):
+        if new_audio:
+            state = self.export_state()
+            state['audio'] = new_audio
+            state['audio_length_ms'] = len(new_audio)
+            state.pop('bar_sequence', None)
+        else:
+            state = self.export_state(keep_audio=True)
         state.update(**kwargs)
-        state.pop('bar_sequence', None)
         return self.__class__(**state)
 
     # PROCESSING
@@ -688,7 +692,7 @@ class SongTwister:
             edited = self.slice(end=end_trim_length, audio=edited)
         logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
         print(len(prefix), len(edited), len(suffix))
-        return self.spawn_with_new_audio(prefix + edited + suffix, **updated_attrs)
+        return self.spawn_new_instance(prefix + edited + suffix, **updated_attrs)
 
     def edit_keep(self, start, end, **kwargs) -> Self:
         edited = self.audio
@@ -712,7 +716,7 @@ class SongTwister:
         logger.info("Keeping from %s to %s", start_position, end_position)
         edited = self.slice(start=start_position, end=end_position, audio=edited)
         logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
-        return self.spawn_with_new_audio(edited)
+        return self.spawn_new_instance(edited)
 
     def edit_loop(self, times=None, duration=None, keep_prefix=False, keep_suffix=False) -> Self:
         # TODO: Allow min and max directives to duration
@@ -731,7 +735,7 @@ class SongTwister:
                 times = int(duration_ms / len(edited)) + 1
                 edited = edited * times
                 edited = edited[:duration_ms]
-        return self.spawn_with_new_audio(prefix + edited + suffix)
+        return self.spawn_new_instance(prefix + edited + suffix)
 
     def edit_fade(self, fade_in=None, fade_out=None) -> Self:
         edited = self.audio
@@ -755,7 +759,7 @@ class SongTwister:
             fade_out_ms = min(fade_out_ms, len(edited))
             logger.info("Fading out for %s", fade_out_ms)
             edited = edited.fade_out(int(fade_out_ms))
-        return self.spawn_with_new_audio(edited)
+        return self.spawn_new_instance(edited)
 
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.
@@ -958,9 +962,9 @@ class SongTwister:
             logger.error('Not a number: %s', key)
         return key, value
 
-    def apply_effects(self) -> AudioSegment:
+    def apply_effects(self) -> Self:
         """Effects are first added to a mapping, allowing them to be
-        added one at a time. This generates an AudioSegment with the
+        added one at a time. This generates a new SongTwister instance with the
         effects applied."""
         logger.info("Applying effects")
         if not self.audio:
@@ -1240,4 +1244,4 @@ class SongTwister:
                     beat_audio,
                     crossfade=min(fade_length, len(beat_audio)))
         logger.info("Finished applying effects")
-        return joined_audio
+        return self.spawn_new_instance(joined_audio)

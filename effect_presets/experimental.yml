@@ -220,3 +220,48 @@ swungten:
     bars: all
     beats: 11-12
     beats_per_bar: 12
+
+
+looper:
+  crossfade: 1/48
+  edit:
+  - do: trim
+    start: prefix
+  - do: keep
+    start: 1
+    end: 4
+  - do: loop
+    times: 16
+  effect_chain:
+  - - effect: replace this 4
+      bars: even
+      beats: every 2 of 4
+      beats_per_bar: 4
+    - effect: replace this 2
+      bars: even
+      beats: every 4 of 4
+      beats_per_bar: 4
+    - effect: replace this 4
+      bars: odd
+      beats: every 2 of 4
+      beats_per_bar: 8
+    - effect: replace this 2
+      bars: odd
+      beats: every 4 of 4
+      beats_per_bar: 8
+  - - effect: pitchdown 12
+      bars: odd
+      beats: 4
+      beats_per_bar: 4
+  # - - effect: bounceback
+  #     bars: all
+  #     beats: every 2 of 4
+  #     beats_per_bar: 4
+  #   - effect: bounceback
+  #     bars: all
+  #     beats: every 4 of 4
+  #     beats_per_bar: 4
+  - - effect: remove
+      bars: all
+      beats: every 4 of 4
+      beats_per_bar: 16

@@ -300,6 +300,7 @@ def main() -> None:
     logger.info("Presets that will be applied: %s",
                 ', '.join(presets_to_apply))
     for preset in presets_to_apply:
+        song_object = song.spawn_new_instance()
         preset_data = all_presets.get(preset)
         if not preset_data:
             logger.error("Failed to find preset '%s'", preset)
@@ -311,21 +312,30 @@ def main() -> None:
         # If the preset does not have a crossfade defined, we use the default
         if crossfade is None:
             crossfade = preferences_config.get('crossfade')
-        song.set_crossfade(crossfade)
+        song_object.set_crossfade(crossfade)
+
+        if 'edit' in preset_data:
+            song_object = song_object.edit(preset_data.get('edit'))
 
         logger.info(
             "Processing '%s' using the preset %s and a crossfade of %s",
-            song.title, preset, crossfade)
+            song_object.filename, preset, crossfade)
 
-        preset_effects: list[dict] = preset_data.get('effects')
 
         # The song config may limit the preset to certain bars
         # (see README for details on selecting)
-        if 'bars' in song_data:
-            for preset_effect in preset_effects:
-                preset_effect['bars'] = song_data.get('bars')
+        # if 'bars' in song_data:
+        #     for preset_effect in preset_effects:
+        #         preset_effect['bars'] = song_data.get('bars')
 
-        song.add_effects(preset_effects)
+        effect_chain: list[list[dict]] = preset_data.get('effect_chain') or []
+        preset_effects = preset_data.get('effects')
+        if preset_effects:
+            effect_chain.append(preset_effects)
+
+        for effects in effect_chain:
+            song_object.add_effects(effects)
+            song_object = song_object.apply_effects()
 
         fade_label = crossfade.replace('/', '-') if isinstance(crossfade, str) else str(crossfade)
         export_version_name = "_".join((
@@ -333,9 +343,8 @@ def main() -> None:
         # TODO: Get the output path first and check that it is can be
         # written to, before generating the audio.
         try:
-            edited_audio = song.apply_effects()
-            exported = song.save_audio(
-                audio=edited_audio,
+            exported = song_object.save_audio(
+                audio=song_object.audio,
                 version_name=export_version_name,
                 overwrite=overwrite
             )
@@ -344,7 +353,7 @@ def main() -> None:
             continue
         if create_html_file:
             save_song_html(
-                song_object=song,
+                song_object=song_object,
                 peaks=exported.peaks,
                 filename=exported.filename,
                 preset=preset_name,

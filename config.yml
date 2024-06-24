@@ -10,6 +10,7 @@ preferences:
   - folk
   - waltz
   - seven
+  - swapper
 logging:
   level: INFO
   log_to_file: True

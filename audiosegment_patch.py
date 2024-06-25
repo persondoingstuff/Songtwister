@@ -253,16 +253,13 @@ class PatchedAudioSegment(AudioSegment):
 
 
     def process_with_ffmpeg(self, parameters: list = None, **kwargs) -> Self:
-        # out_f, _ = _fd_or_path_or_tempfile(out_f, 'wb+')
-        # out_f.seek(0)
-
         pcm_for_wav = self._data
         if self.sample_width == 1:
             # convert to unsigned integers for wav
             pcm_for_wav = audioop.bias(self._data, 1, 128)
 
-        # data = BytesIO()
-        data = NamedTemporaryFile(mode="w+b", delete=False)
+        data = BytesIO()
+        # data = NamedTemporaryFile(mode="w+b", delete=False)
         wave_data = wave.open(data, 'wb')
         wave_data.setnchannels(self.channels)
         wave_data.setsampwidth(self.sample_width)
@@ -272,26 +269,18 @@ class PatchedAudioSegment(AudioSegment):
         wave_data.setnframes(int(self.frame_count()))
         wave_data.writeframesraw(pcm_for_wav)
         wave_data.close()
-        print(data)
-        # data, data_close = _fd_or_path_or_tempfile(data, 'rb', tempfile=True)
+        data.seek(0)
+
+        stdin_parameter = subprocess.PIPE
+        stdin_data = data.read()
 
         # build converter command to export
-        conversion_command = [
-            self.converter,
-            "-f", "wav"
-        ]
+        conversion_command = [self.converter, "-f", "wav"]
 
-        read_ahead_limit = kwargs.get('read_ahead_limit', -1)
+        read_ahead_limit = kwargs.get('read_ahead_limit', -1)  # Unlimited
         conversion_command.extend([
             "-read_ahead_limit", str(read_ahead_limit), "-i", "cache:pipe:0",
-            # "-i", data.name,  # input options (filename last)
         ])
-        # stdin_parameter = None
-        # stdin_data = None
-        stdin_parameter = subprocess.PIPE
-        data.seek(0)
-        stdin_data = data.read()
-        print(len(stdin_data))
 
         if parameters is not None:
             # extend arguments with arbitrary set
@@ -326,5 +315,4 @@ class PatchedAudioSegment(AudioSegment):
 
         finally:
             data.close()
-            # os.unlink(data.name)
         return obj

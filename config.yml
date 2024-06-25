@@ -13,7 +13,7 @@ preferences:
   - swapper
 logging:
   level: INFO
-  log_to_file: True
+  log_to_file: False
 html_visualization:
   generate: False
   template_path: ./waveform_template.html.j2

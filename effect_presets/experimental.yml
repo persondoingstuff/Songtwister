@@ -235,6 +235,8 @@ looper:
     end: 4
   - do: loop
     times: 16
+  - do: process
+    tempo: 1.1x
   effect_chain:
   - - effect: replace this 4
       bars: even

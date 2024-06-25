@@ -794,6 +794,7 @@ class SongTwister:
                 note = arg[0]
                 if len(arg) == 2 and arg[1] in "#b":
                     accidental = -1 if arg[1] == 'b' else 1
+                # TODO
                 logger.warning("The fancy note calculation has not been built yet.")
                 return 1.0
             try:
@@ -805,7 +806,8 @@ class SongTwister:
             if suffix == 'x':
                 return arg
             if suffix == '%':
-                return (arg / 100) + 1
+                print(arg, (arg / 100))
+                return (arg / 100)
             if suffix == 'bpm' and bpm:
                 return arg / bpm
             return arg

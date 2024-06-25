@@ -252,9 +252,9 @@ class PatchedAudioSegment(AudioSegment):
 
 
 
-    def process_with_ffmpeg(self, out_f, parameters: list = None) -> Self:
-        out_f, _ = _fd_or_path_or_tempfile(out_f, 'wb+')
-        out_f.seek(0)
+    def process_with_ffmpeg(self, parameters: list = None, **kwargs) -> Self:
+        # out_f, _ = _fd_or_path_or_tempfile(out_f, 'wb+')
+        # out_f.seek(0)
 
         pcm_for_wav = self._data
         if self.sample_width == 1:
@@ -262,7 +262,7 @@ class PatchedAudioSegment(AudioSegment):
             pcm_for_wav = audioop.bias(self._data, 1, 128)
 
         # data = BytesIO()
-        data = NamedTemporaryFile(mode="wb", delete=False)
+        data = NamedTemporaryFile(mode="w+b", delete=False)
         wave_data = wave.open(data, 'wb')
         wave_data.setnchannels(self.channels)
         wave_data.setsampwidth(self.sample_width)
@@ -272,19 +272,31 @@ class PatchedAudioSegment(AudioSegment):
         wave_data.setnframes(int(self.frame_count()))
         wave_data.writeframesraw(pcm_for_wav)
         wave_data.close()
-
-        output = NamedTemporaryFile(mode="w+b", delete=False)
+        print(data)
+        # data, data_close = _fd_or_path_or_tempfile(data, 'rb', tempfile=True)
 
         # build converter command to export
         conversion_command = [
             self.converter,
-            '-y',  # always overwrite existing files
-            "-f", "wav", "-i", data.name,  # input options (filename last)
+            "-f", "wav"
         ]
+
+        read_ahead_limit = kwargs.get('read_ahead_limit', -1)
+        conversion_command.extend([
+            "-read_ahead_limit", str(read_ahead_limit), "-i", "cache:pipe:0",
+            # "-i", data.name,  # input options (filename last)
+        ])
+        # stdin_parameter = None
+        # stdin_data = None
+        stdin_parameter = subprocess.PIPE
+        data.seek(0)
+        stdin_data = data.read()
+        print(len(stdin_data))
 
         if parameters is not None:
             # extend arguments with arbitrary set
             conversion_command.extend(parameters)
+
         conversion_command.extend([
             "-f", "wav", "-" # Stream output
         ])
@@ -296,14 +308,12 @@ class PatchedAudioSegment(AudioSegment):
 
         log_conversion(conversion_command)
 
-        stdin_parameter = None
         p = subprocess.Popen(conversion_command, stdin=stdin_parameter,
                              stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        p_out, p_err = p.communicate()
+        p_out, p_err = p.communicate(input=stdin_data)
 
         try:
             if p.returncode != 0 or len(p_out) == 0:
-                data.close()
                 raise CouldntDecodeError(
                     "Decoding failed. ffmpeg returned error code: {0}\n\n"
                     "Command:{1}\n\nOutput from ffmpeg/avlib:\n\n{1}".format(
@@ -316,5 +326,5 @@ class PatchedAudioSegment(AudioSegment):
 
         finally:
             data.close()
-            os.unlink(data.name)
+            # os.unlink(data.name)
         return obj

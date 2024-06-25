@@ -20,9 +20,11 @@ from pydub.exceptions import (
     InvalidID3TagVersion,
     InvalidTag,
     CouldntEncodeError,
+    CouldntDecodeError,
 )
 
 from pydub import AudioSegment
+from pydub.audio_segment import fix_wav_headers
 
 def _fd_or_path_or_tempfile(fd, mode='w+b', tempfile=True):
     close_fd = False
@@ -284,7 +286,7 @@ class PatchedAudioSegment(AudioSegment):
             # extend arguments with arbitrary set
             conversion_command.extend(parameters)
         conversion_command.extend([
-            "-f", "wav", output.name,  # output options (filename last)
+            "-f", "wav", "-" # Stream output
         ])
 
         # Quotes within the command is handled poorly on Windows.
@@ -294,28 +296,25 @@ class PatchedAudioSegment(AudioSegment):
 
         log_conversion(conversion_command)
 
-        # read stdin / write stdout
-        with open(os.devnull, 'rb') as devnull:
-            p = subprocess.Popen(conversion_command, stdin=devnull, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        stdin_parameter = None
+        p = subprocess.Popen(conversion_command, stdin=stdin_parameter,
+                             stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         p_out, p_err = p.communicate()
 
-        log_subprocess_output(p_out)
-        log_subprocess_output(p_err)
-
         try:
-            if p.returncode != 0:
-                raise CouldntEncodeError(
-                    "Encoding failed. ffmpeg/avlib returned error code: {0}\n\nCommand:{1}\n\nOutput from ffmpeg/avlib:\n\n{2}".format(
+            if p.returncode != 0 or len(p_out) == 0:
+                data.close()
+                raise CouldntDecodeError(
+                    "Decoding failed. ffmpeg returned error code: {0}\n\n"
+                    "Command:{1}\n\nOutput from ffmpeg/avlib:\n\n{1}".format(
                         p.returncode, conversion_command, p_err.decode(errors='ignore') ))
 
-            output.seek(0)
-            out_f.write(output.read())
+            p_out = bytearray(p_out)
+            fix_wav_headers(p_out)
+            p_out = bytes(p_out)
+            obj = self.__class__(p_out)
 
         finally:
             data.close()
-            output.close()
             os.unlink(data.name)
-            os.unlink(output.name)
-
-        out_f.seek(0)
-        return out_f
+        return obj

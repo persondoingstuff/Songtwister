@@ -4,6 +4,7 @@ One of these vastly improves performance (using memory instead of temp files on 
 This patches the improvements in.
 """
 import os
+from typing import Self
 import sys
 import wave
 import subprocess
@@ -215,6 +216,81 @@ class PatchedAudioSegment(AudioSegment):
         conversion_command.extend([
             "-f", format, output.name,  # output options (filename last)
         ])
+
+        log_conversion(conversion_command)
+        
+        # read stdin / write stdout
+        with open(os.devnull, 'rb') as devnull:
+            p = subprocess.Popen(conversion_command, stdin=devnull, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        p_out, p_err = p.communicate()
+
+        log_subprocess_output(p_out)
+        log_subprocess_output(p_err)
+
+        try:
+            if p.returncode != 0:
+                raise CouldntEncodeError(
+                    "Encoding failed. ffmpeg/avlib returned error code: {0}\n\nCommand:{1}\n\nOutput from ffmpeg/avlib:\n\n{2}".format(
+                        p.returncode, conversion_command, p_err.decode(errors='ignore') ))
+
+            output.seek(0)
+            out_f.write(output.read())
+
+        finally:
+            data.close()
+            output.close()
+            os.unlink(data.name)
+            os.unlink(output.name)
+
+        out_f.seek(0)
+        return out_f
+
+
+
+
+
+
+    def process_with_ffmpeg(self, out_f, parameters: list = None) -> Self:
+        out_f, _ = _fd_or_path_or_tempfile(out_f, 'wb+')
+        out_f.seek(0)
+
+        pcm_for_wav = self._data
+        if self.sample_width == 1:
+            # convert to unsigned integers for wav
+            pcm_for_wav = audioop.bias(self._data, 1, 128)
+
+        # data = BytesIO()
+        data = NamedTemporaryFile(mode="wb", delete=False)
+        wave_data = wave.open(data, 'wb')
+        wave_data.setnchannels(self.channels)
+        wave_data.setsampwidth(self.sample_width)
+        wave_data.setframerate(self.frame_rate)
+        # For some reason packing the wave header struct with
+        # a float in python 2 doesn't throw an exception
+        wave_data.setnframes(int(self.frame_count()))
+        wave_data.writeframesraw(pcm_for_wav)
+        wave_data.close()
+
+        output = NamedTemporaryFile(mode="w+b", delete=False)
+
+        # build converter command to export
+        conversion_command = [
+            self.converter,
+            '-y',  # always overwrite existing files
+            "-f", "wav", "-i", data.name,  # input options (filename last)
+        ]
+
+        if parameters is not None:
+            # extend arguments with arbitrary set
+            conversion_command.extend(parameters)
+        conversion_command.extend([
+            "-f", "wav", output.name,  # output options (filename last)
+        ])
+
+        # Quotes within the command is handled poorly on Windows.
+        # It works better if the command is one string, instead of a list of strings.
+        if sys.platform == 'win32':
+            conversion_command = " ".join(conversion_command)
 
         log_conversion(conversion_command)
 

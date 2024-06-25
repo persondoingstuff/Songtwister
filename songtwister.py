@@ -358,7 +358,8 @@ class SongTwister:
                    output_format: Optional[str] = None,
                    overwrite: bool = False,
                    version_name: Optional[str] = None,
-                   waveform_resolution: Optional[int] = None) -> ExportResult:
+                   waveform_resolution: Optional[int] = None,
+                   extra_parameters: Optional[list] = None) -> ExportResult:
         """Write an AudioSegment to a file. To prevent overwriting the original,
         if no version_name is passed, a random one is generated."""
         if not version_name:
@@ -387,7 +388,8 @@ class SongTwister:
         logger.info("Writing file: %s", file_path)
         try:
             audio.export(
-                out_f=file_path, format=output_format, bitrate=self.bitrate)
+                out_f=file_path, format=output_format,
+                bitrate=self.bitrate, parameters=extra_parameters)
         except PermissionError as e:
             logger.error('Failed to write %s: %s', file_path, e)
             return

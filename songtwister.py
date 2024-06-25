@@ -13,7 +13,7 @@ from pydub.utils import mediainfo
 logger = logging.getLogger("songtwister")
 
 ExportResult = namedtuple("ExportResult", ["filename", "peaks"])
-
+ProcessingResult = namedtuple("ProcessingResult", ["audio", "bpm"])
 
 class SongTwister:
     def __init__(self,
@@ -627,6 +627,8 @@ class SongTwister:
             state['audio'] = new_audio
             state['audio_length_ms'] = len(new_audio)
             state.pop('bar_sequence', None)
+            state.pop('bar_length_ms', None)
+            state.pop('beat_length_ms', None)
         else:
             state = self.export_state(keep_audio=True)
         state.update(**kwargs)
@@ -639,6 +641,7 @@ class SongTwister:
             'keep': 'edit_keep',
             'loop': 'edit_loop',
             'fade': 'edit_fade',
+            'process': 'apply_processing',
         }
         edited = self
         for edit_item in edit_list:
@@ -762,6 +765,81 @@ class SongTwister:
             logger.info("Fading out for %s", fade_out_ms)
             edited = edited.fade_out(int(fade_out_ms))
         return self.spawn_new_instance(edited)
+
+    @staticmethod
+    def process_audio(audio: AudioSegment, ffmpeg_parameters: Optional[list] = None, **kwargs) -> ProcessingResult:
+        if not ffmpeg_parameters:
+            ffmpeg_parameters = []
+
+        bpm = kwargs.pop('bpm', None)
+        note_key = kwargs.pop('bpm', None)
+
+        def _interpret(arg: str, bpm=bpm, note_key=note_key):
+            if arg is None:
+                return None
+            if not arg:
+                return 1.0
+            if isinstance(arg, (float, int)):
+                return float(arg)
+            suffix = None
+            arg = arg.lower()
+            if arg == 'follow':
+                return arg
+            for char in ('x', '%', 'bpm'):
+                if arg.endswith(char):
+                    suffix = char
+                    arg = arg.removesuffix(char)
+            notes = "abcdefg".split()
+            if arg[0] in notes and note_key:
+                note = arg[0]
+                if len(arg) == 2 and arg[1] in "#b":
+                    accidental = -1 if arg[1] == 'b' else 1
+                logger.warning("The fancy note calculation has not been built yet.")
+                return 1.0
+            try:
+                arg = float(arg)
+            except ValueError:
+                logger.error("'%s' could not be converted to float. "
+                            "Falling back to 1.0", arg)
+                arg = 1.0
+            if suffix == 'x':
+                return arg
+            if suffix == '%':
+                return (arg / 100) + 1
+            if suffix == 'bpm' and bpm:
+                return arg / bpm
+            return arg
+
+        pitch = _interpret(kwargs.pop('pitch', None), None, note_key)
+        tempo = _interpret(kwargs.pop('tempo', None), bpm, None)
+        follow = 'follow'
+
+        if tempo == follow and pitch == follow:
+            logger.warning(
+                "No processing applied. Pitch: '%s', tempo: '%s'", pitch, tempo)
+            return ProcessingResult(audio, bpm)
+        if tempo == follow and pitch:
+            tempo = pitch
+        elif pitch == follow and tempo:
+            pitch = tempo
+
+        new_bpm = round(bpm * tempo, 2) if tempo else bpm
+
+        if tempo:
+            ffmpeg_parameters.append(f'rubberband=tempo={tempo}')
+        if pitch:
+            ffmpeg_parameters.append(f'rubberband=pitch={pitch}')
+        return ProcessingResult(audio.process_with_ffmpeg(parameters=[
+            f'-af \"{",".join(ffmpeg_parameters)}\"'
+            ]),
+            new_bpm)
+
+    def apply_processing(
+            self, ffmpeg_parameters: Optional[list] = None, **kwargs) -> Self:
+        processed = self.process_audio(
+                audio=self.audio, ffmpeg_parameters=ffmpeg_parameters, bpm=self.bpm, **kwargs)
+        return self.spawn_new_instance(new_audio=processed.audio, bpm=processed.bpm)
+
 
     def create_section(self, name: str, start_bar: int, end_bar: int) -> None:
         """TODO: This has not been used yet, and may not work properly.

@@ -51,24 +51,30 @@ def _fd_or_path_or_tempfile(fd, mode='w+b', tempfile=True):
     return fd, close_fd
 
 class PatchedAudioSegment(AudioSegment):
-    def append(self, seg, crossfade=100):
+    def append(self, seg, crossfade=100, dynamic_crossfade=False):
         seg1, seg2 = AudioSegment._sync(self, seg)
 
         if not crossfade:
             return seg1._spawn(seg1._data + seg2._data)
         elif crossfade > len(self):
-            raise ValueError("Crossfade is longer than the original AudioSegment ({}ms > {}ms)".format(
-                crossfade, len(self)
-            ))
+            if dynamic_crossfade:
+                crossfade = len(self)
+            else:
+                raise ValueError("Crossfade is longer than the original AudioSegment ({}ms > {}ms)".format(
+                    crossfade, len(self)
+                ))
         elif crossfade > len(seg):
-            raise ValueError("Crossfade is longer than the appended AudioSegment ({}ms > {}ms)".format(
-                crossfade, len(seg)
-            ))
+            if dynamic_crossfade:
+                crossfade = len(seg)
+            else:
+                raise ValueError("Crossfade is longer than the appended AudioSegment ({}ms > {}ms)".format(
+                    crossfade, len(seg)
+                ))
 
         xf = seg1[-crossfade:].fade(to_gain=-120, start=0, end=float('inf'))
         xf *= seg2[:crossfade].fade(from_gain=-120, start=0, end=float('inf'))
 
-        # This is the code in the pydub repo:
+        # This is the code in the pydub repo (added after the latest release):
         # output = BytesIO()
 
         # output.write(seg1[:-crossfade]._data)
@@ -80,7 +86,11 @@ class PatchedAudioSegment(AudioSegment):
         # output.close()
         # return obj
 
-        # This is another approach that seems to be faster:
+        # This is another approach that seems to be faster.
+        # The _spawn method by default accepts a list of bytes objects and
+        # concatenates them. This results in the same data as the above solution,
+        # but appears to work faster.
+        # Might not handle large amounts of data as well, though.
         return seg1._spawn(data=[
             seg1[:-crossfade]._data, xf._data, seg2[crossfade:]._data])
 

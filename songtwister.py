@@ -696,7 +696,6 @@ class SongTwister:
             logger.info("Trimming %s from end", end_trim_length)
             edited = self.slice(end=end_trim_length, audio=edited)
         logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
-        print(len(prefix), len(edited), len(suffix))
         return self.spawn_new_instance(prefix + edited + suffix, **updated_attrs)
 
     def edit_keep(self, start, end, **kwargs) -> Self:
@@ -772,31 +771,31 @@ class SongTwister:
             ffmpeg_parameters = []
 
         bpm = kwargs.pop('bpm', None)
-        note_key = kwargs.pop('bpm', None)
+        note_key = kwargs.pop('note_key', None)
 
-        def _interpret(arg: str, bpm=bpm, note_key=note_key):
-            if arg is None:
-                return None
-            if not arg:
-                return 1.0
+        def _interpret(arg: str, pitch=False, bpm=bpm, note_key=note_key):
             if isinstance(arg, (float, int)):
+                if pitch:
+                    arg = 1 + ((1/12) * arg)
                 return float(arg)
-            suffix = None
+            if not arg or not isinstance(arg, str):
+                return None
             arg = arg.lower()
             if arg == 'follow':
                 return arg
+            suffix = None
             for char in ('x', '%', 'bpm'):
                 if arg.endswith(char):
                     suffix = char
-                    arg = arg.removesuffix(char)
-            notes = "abcdefg".split()
-            if arg[0] in notes and note_key:
-                note = arg[0]
-                if len(arg) == 2 and arg[1] in "#b":
-                    accidental = -1 if arg[1] == 'b' else 1
-                # TODO
-                logger.warning("The fancy note calculation has not been built yet.")
-                return 1.0
+                    arg = arg.removesuffix(char).strip()
+            # notes = "abcdefg".split()
+            # if arg[0] in notes and note_key:
+            #     note = arg[0]
+            #     if len(arg) == 2 and arg[1] in "#b":
+            #         accidental = -1 if arg[1] == 'b' else 1
+            #     # TODO
+            #     logger.warning("The fancy note calculation has not been built yet.")
+            #     return 1.0
             try:
                 arg = float(arg)
             except ValueError:
@@ -812,8 +811,10 @@ class SongTwister:
                 return arg / bpm
             return arg
 
-        pitch = _interpret(kwargs.pop('pitch', None), None, note_key)
-        tempo = _interpret(kwargs.pop('tempo', None), bpm, None)
+        pitch = _interpret(arg=kwargs.pop('pitch', None),
+                           pitch=True, bpm=None, note_key=note_key)
+        tempo = _interpret(arg=kwargs.pop('tempo', None),
+                           pitch=False, bpm=bpm, note_key=None)
         follow = 'follow'
 
         if tempo == follow and pitch == follow:

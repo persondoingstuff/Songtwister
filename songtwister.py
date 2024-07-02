@@ -5,15 +5,18 @@ from collections import namedtuple
 import logging
 
 # from pydub import AudioSegment
-from audiosegment_patch import PatchedAudioSegment as AudioSegment
 from pydub import effects as pd_effects
 from pydub import silence as pd_silence
 from pydub.utils import mediainfo
+
+from audiosegment_patch import PatchedAudioSegment as AudioSegment
+import effect_functions
 
 logger = logging.getLogger("songtwister")
 
 ExportResult = namedtuple("ExportResult", ["filename", "peaks"])
 ProcessingResult = namedtuple("ProcessingResult", ["audio", "bpm"])
+Excerpt = namedtuple("Duration", ["start", "end", "duration"])
 
 class SongTwister:
     def __init__(self,
@@ -418,18 +421,21 @@ class SongTwister:
         create offsets in rhythm.
         So this implements a finegrained slicing on sample level instead."""
         if start is not None:
-            start_sample = self._ms_to_samples(max(start, 0))
+            start_sample = int(self._ms_to_samples(max(start, 0)))
         else:
             start_sample = None
         if end is not None:
-            end_sample = min(self._ms_to_samples(end),
-                             self.audio.frame_count())
+            end_sample = int(min(
+                self._ms_to_samples(end), self.audio.frame_count()))
+            if start_sample is not None:
+                end_sample = max(start_sample, end_sample)
         else:
             end_sample = None
         if not audio:
             audio = self.audio
         # NOTE: This does not seem to change anything, so it isn't needed after all.
         # return audio[start:end]
+        print(start_sample, end_sample)
         mine = audio.get_sample_slice(
             start_sample=start_sample, end_sample=end_sample)
         return mine
@@ -491,11 +497,18 @@ class SongTwister:
         # When the remaining length is less than a bar or equals the suffix length, stop
         # If the suffix length is not set, set it to the remainder
         # Set bars in self.bar_sequence
-
-        remainder: int | float = self.audio_length_ms - self.prefix_length_ms
-        bar_sequence = []
+        if not self.audio:
+            self.load_audio()
+        remainder = self.audio_length_ms - self.prefix_length_ms
+        bar_sequence = [{
+            'type': 'prefix',
+            'bpm': None,
+            'start': 0,
+            'end': self.prefix_length_ms,
+        }]
         bar_number = 1
         current_position = self.prefix_length_ms
+        bpm = self.bpm
         while True:
             if self.suffix_length_ms and remainder <= self.suffix_length_ms:
                 break
@@ -503,15 +516,23 @@ class SongTwister:
                 break
             end = current_position + self.bar_length_ms
             bar_sequence.append({
+                'type': 'bar',
                 'number': bar_number,
                 'start': current_position,
-                'end': end
+                'end': end,
+                'bpm': bpm,
             })
             current_position = end
             remainder = remainder - self.bar_length_ms
             bar_number += 1
 
         self.suffix_length_ms = remainder
+        bar_sequence.append({
+            'type': 'suffix',
+            'bpm': None,
+            'start': self.suffix_length_ms,
+            'end': self.audio_length_ms,
+        })
         self.bar_sequence = bar_sequence
         # TODO: Make a test: This should generate a list of dicts.
         # Each dict should be like this:
@@ -527,7 +548,7 @@ class SongTwister:
                 self.build_bar_sequence()
             bars = self.bar_sequence
         # We perform the selection using a list of bar numbers as ints
-        bar_numbers = [bar.get('number') for bar in bars]
+        bar_numbers = [bar.get('number') for bar in bars if 'number' in bar]
         selected_bars = self.perform_selection(bar_numbers, selection)
         # Then we get the full bar dict for each selected bar
         bars = [bar for bar in bars if bar.get('number') in selected_bars]
@@ -537,9 +558,9 @@ class SongTwister:
                 selection, len(bars))
         return bars
 
-    def get_single_bar(self, number: int) -> dict:
-        """Get a bar dict by its bar number"""
-        bars = self.get_bars(number)
+    def get_single_bar(self, selection: Union[int, str]) -> dict:
+        """Get a bar dict by its bar number, or another selection criterium"""
+        bars = self.get_bars(selection=selection)
         if not bars:
             raise KeyError
         return bars[0]
@@ -572,7 +593,7 @@ class SongTwister:
             return AudioSegment.empty()
         if not self.audio:
             self.load_audio()
-        prefix_end = max(0, self.prefix_length_ms - 1)
+        prefix_end = max(0, self.prefix_length_ms)
         return self.audio[:prefix_end]
 
     def get_suffix(self) -> AudioSegment:
@@ -590,36 +611,139 @@ class SongTwister:
         return self.audio[len(self.audio) - self.suffix_length_ms:]
 
     @staticmethod
-    def _is_time(value) -> bool:
+    def _is_time(value: str, accept_number: bool = False) -> bool:
+        if accept_number and isinstance(value, (float, int)):
+            return True
         if isinstance(value, str):
             if ':' in value:
-                if all([x.isnumeric() for x in value.split(':')]):
+                if all([x.isnumeric()
+                        for x in value.replace('.', '').split(':')]):
                     return True
-            if value.endswith('s'):
-                if value.removesuffix('s').isnumeric():
-                    return True
+            for suffix in ('ms', 's'):
+                if value.endswith(suffix):
+                    if value.removesuffix(suffix).isnumeric():
+                        return True
         return False
 
     @staticmethod
-    def _time_to_ms(value: str) -> int:
-        time_parts = value.split(':')
-        if len(time_parts) == 3:
-            hours = int(time_parts[0])
-            minutes = int(time_parts[1])
+    def _time_to_ms(value: str) -> float:
+        hours = 0
+        minutes = 0
+        seconds = 0
+        time_parts = str(value).split(':')
+        if len(time_parts) == 3: # 00:00:01
+            hours = float(time_parts[0])
+            minutes = float(time_parts[1])
             seconds = time_parts[2]
-        elif len(time_parts) == 2:
-            hours = 0
-            minutes = int(time_parts[0])
+        elif len(time_parts) == 2: # 0:01
+            minutes = float(time_parts[0])
             seconds = time_parts[1]
+        elif len(time_parts) == 1 and time_parts[0].endswith('ms'):
+            seconds = "0." + time_parts[0].removesuffix('ms')
         elif len(time_parts) == 1 and time_parts[0].endswith('s'):
-            hours = 0
-            minutes = 0
             seconds = time_parts[0].removesuffix('s')
         else:
             raise ValueError(f"Unknown timeformat: {value}")
         seconds = float(seconds) if '.' in seconds else int(seconds)
         seconds += (hours * 60 * 60) + (minutes * 60)
         return seconds * 1000
+
+    @staticmethod
+    def _get_bars_and_beats(value: str):
+        """Numbers (int or float) refer to bars. x/y refers to fractions of a bar (ie. beats).
+        """
+        parts = str(value).split()
+        bars = 0
+        bar_fraction = 0
+        for part in parts:
+            try:
+                if '/' in part:
+                    a, b = [int(x) for x in part.split('/')]
+                    bar_fraction += max(a, 1) / max(b, 1)
+                else:
+                    part = float(part)
+                    bar_number = int(part)
+                    bars += bar_number
+                    bar_fraction += part - bar_number
+            except ValueError as e:
+                logger.error("Invalid format: %s. %s", part, e)
+        bars += int(bar_fraction)
+        bar_fraction = bar_fraction - int(bar_fraction)
+        return bars, bar_fraction
+
+    @staticmethod
+    def _get_duration(full_duration: Union[float, int],
+                      start: Union[float, int, None] = None,
+                      end: Union[float, int, None] = None,
+                      length: Union[float, int, None] = None) -> Excerpt:
+        """full_duration is a length of time. Select a excerpt by passing any
+        of offset from the start, offset from the end, and the length of the
+        offset. If all three are passed, the longest of end or start + length
+        wins.
+        All values are floats or ints of milliseconds.
+        Returns Excerpt(start, end, duration)
+        """
+        if not isinstance(full_duration, (float, int)) or full_duration <= 0:
+            raise ValueError(f"Invalid duration: {full_duration}")
+        if any([not isinstance(x, (float, int, None)) for x in (start, end, length)]):
+            logger.error("Invalid value passed. %s (%s), %s (%s), %s (%s)",
+                         start, type(start), end, type(end), length,
+                         type(length))
+            return full_duration
+
+        def _ensure_within_range(number):
+            if number is None:
+                return
+            if number < 0:
+                number = 0
+            elif number > full_duration:
+                number = full_duration
+            return number
+
+        def _matches(*a):
+            return [x is not None for x in a]
+
+        start = _ensure_within_range(start)
+        end = _ensure_within_range(end)
+        length = _ensure_within_range(length)
+
+        duration = full_duration
+        start_at = 0
+        end_at = full_duration
+        if _matches(start, end, length) == [False, False, False]:
+            logger.warning("No start, end or length passed - "
+                           "returning original duration")
+            return full_duration
+        elif _matches(start, end, length) == [True, True, False]:
+            start_at = start
+            end_at = end
+        elif _matches(start, end, length) == [True, False, True]:
+            start_at = start
+            end_at = min(start + length, full_duration)
+        elif _matches(start, end, length) == [False, True, True]:
+            end_at = end
+            start_at = max(end - length, 0)
+        elif _matches(start, end, length) == [True, False, False]:
+            start_at = start
+            end_at = full_duration
+        elif _matches(start, end, length) == [False, True, False]:
+            start_at = 0
+            end_at = end
+        elif _matches(start, end, length) == [False, False, True]:
+            start = 0
+            end_at = length
+        elif _matches(start, end, length) == [True, True, True]:
+            start_at = start
+            end_at = end
+            max_length = max(start_at + length, full_duration)
+            if max_length > end_at:
+                end_at = max_length
+        else:
+            logger.info("Unknown combination. Start: %s, end: %s, length: %s",
+                        start, end, length)
+        duration = max(end_at - start_at, 0)
+        return Excerpt(start_at, end_at, duration)
+
 
     def spawn_new_instance(self, new_audio: Optional[AudioSegment] = None, **kwargs):
         if new_audio:
@@ -634,11 +758,207 @@ class SongTwister:
         state.update(**kwargs)
         return self.__class__(**state)
 
+
+
+    def add_processing(self, effect: dict) -> Self:
+        # This should live somewhere else
+        effect_index = {
+            'test': {
+                'function': effect_functions.apply_noop,
+                'ffmpeg': False,
+                'changes_timing': True,
+            },
+            'cut': {
+                'function': effect_functions.apply_cut,
+                'ffmpeg': False,
+                'changes_timing': True,
+            },
+            'pad': {
+                'function': effect_functions.apply_pad,
+                'ffmpeg': False,
+                'changes_timing': True,
+            },
+            'tempo': {
+                'function': effect_functions.apply_noop,
+                'ffmpeg': True,
+                'changes_timing': True,
+            },
+            'pitch': {
+                'function': effect_functions.apply_noop,
+                'ffmpeg': True,
+                'changes_timing': False,
+            },
+            'speed': {
+                'function': effect_functions.apply_speed,
+                'ffmpeg': False,
+                'changes_timing': True,
+            },
+            'mute': {
+                'function': effect_functions.apply_mute,
+                'ffmpeg': False,
+                'changes_timing': False,
+            },
+            'pan': {
+                'function': effect_functions.apply_pan,
+                'ffmpeg': False,
+                'changes_timing': False,
+            },
+            'reverse': {
+                'function': effect_functions.apply_reverse,
+                'ffmpeg': False,
+                'changes_timing': False,
+            },
+        }
+
+        songtwister = self
+        if not songtwister.bar_sequence:
+            songtwister.build_bar_sequence()
+
+        print(effect)
+        if 'group' in effect:
+            effect_list = effect.pop('group')
+        else:
+            effect_list = [effect]
+        effects_to_apply = []
+        ffmpeg_effects_to_apply = []
+        for e in effect_list:
+            if 'do' in e:
+                effect_name = e.get('do')
+                effect_function: function = effect_index.get(effect_name)
+                e['function'] = effect_function.get('function')
+                if not effect_function:
+                    logger.error("Unknown effect effect: %s", e)
+                    continue
+                if effect_function.get('ffmpeg'):
+                    ffmpeg_effects_to_apply.append(e)
+                else:
+                    effects_to_apply.append(e)
+            else:
+                logger.error("Invalid effect: %s", e)
+        if not effects_to_apply:
+            logger.warning("No valid effects to apply in %s. Doing nothing", effect)
+            return songtwister
+
+        # Mark out each segment to be processed
+        targeted_segments = []
+
+        crossfade = effect.get('crossfade') or songtwister.crossfade
+        crossfade = 0 # Disable for now
+
+        bar_selection = effect.get('bars')
+        beat_selection = effect.get('beats')
+        # For now, disable slice targeting
+        bar_selection = None
+        beat_selection = None
+        if bar_selection is None and beat_selection is None:
+            # Don't analyze further. Process the entire audio as one and move on
+            targeted_segments.append({
+                'start_ms': 0,
+                'end_ms': songtwister.audio_length_ms
+            })
+            logger.info("Applying effects to full audio")
+        # else:
+        #     beats_per_bar = effect_item.get('beats_per_bar') or songtwister.beats_per_bar
+
+        #     if bar_selection and not (isinstance(bar_selection, str) and bar_selection.lower() == 'all'):
+        #         #TODO: Perform bar selection. A subset of all the bars will be looked at. 
+        #         selected_bars = songtwister.get_bars(selection=bar_selection, bars=songtwister.bar_sequence)
+        #     else: # all bars are selected
+        #         selected_bars = songtwister.bar_sequence
+
+        #     for bar in selected_bars:
+        #         number = bar.get('number')
+        #         beat_count = bar.get('beats') or beats_per_bar
+        #         beats_in_this_bar = list(range(1, beat_count + 1))
+        #         start_ms = bar.get('start')
+        #         end_ms = bar.get('end')
+        #         bar_length = end_ms - start_ms
+        #         beat_length = bar_length / beat_count
+        #         segment = {
+        #                 'bar_number': number,
+        #                 'contains_beats': beats_in_this_bar,
+        #                 'beat_count': beat_count,
+        #                 'start_ms': start_ms,
+        #                 'end_ms': end_ms
+        #             }
+
+        #         if beat_selection and not (isinstance(beat_selection, str) and beat_selection.lower() == 'all'):
+        #             # TODO: Perform beat selection. A subset of all the beats will be looked at.
+        #             selected_beats = self.perform_selection(items=beats_in_this_bar, criteria=beat_selection)
+        #             for beat in selected_beats:
+        #                 beat_end = beat * beat_length
+        #                 beat_start = beat_end - beat_length
+        #                 segment['start_ms'] = beat_start
+        #                 segment['start_end'] = beat_end
+        #                 segment['contains_beats'] = [beat]
+        #         else: # selected bars are targeted in their entirity
+        #             targeted_segments.append(segment)
+
+        print(effects_to_apply, ffmpeg_effects_to_apply)
+        transformed_audio = songtwister.audio
+        # Now, each targeted_segment represents a chunk of audio to be processed.
+        for segment in targeted_segments:
+            logger.info("Segment: %s", segment)
+            segment_start = segment.get('start_ms')
+            segment_end = segment.get('end_ms')
+            # Determine crossfade lengths here and store them for the reassembly
+            audio_chunk = songtwister.slice(
+                start=segment_start,
+                end=segment_end,
+                audio=transformed_audio)
+            if segment_start:
+                audio_before = songtwister.slice(
+                    end=segment_start,
+                    audio=transformed_audio)
+            else:
+                audio_before = AudioSegment.empty()
+            if segment_end:
+                audio_after = songtwister.slice(
+                    start=segment_end,
+                    audio=transformed_audio)
+            else:
+                audio_after = AudioSegment.empty()
+            updated_params = {}
+            applied = []
+            # Group edits in ffmpeg based and native ones. Do them separately
+            for effect_item in ffmpeg_effects_to_apply:
+                logger.info("(Not) Applying ffmpeg effects: %s", effect_item)
+
+            for effect_item in effects_to_apply:
+                logger.info("Applying effect: %s", effect_item)
+                effect_function: function = effect_item.get('function')
+                transformed: effect_functions.TransformedAudio = effect_function(
+                    audio=audio_chunk, songtwister=songtwister, **effect_item)
+                audio_chunk = transformed.audio
+                updated_params.update(transformed.updates)
+                applied.append(transformed.effect)
+                if transformed.timing_changed:
+                    logger.info("Timing changed")
+                # Here we hand off to a function that we get from an index.
+                # They have a common interface. Take a audio chunk and the songtwister object, it came from.
+                # Return a new audio chunk and a description of what changed.
+                # Eg. it was removed, had its speed changed, or was repeated - in which case we will need to adapt the song structure element.
+
+            logger.info("Effects applied: %s", applied)
+            logger.info("Updated: %s", updated_params)
+            # NOTE!! We need to make the audio chunks longer to match the audio lost with the crossfade
+            crossfade_after = (crossfade, len(audio_chunk), len(audio_after))
+            audio_chunk = audio_chunk.append(audio_after, crossfade=crossfade_after)
+            crossfade_before = (crossfade, len(audio_chunk), len(audio_before))
+            transformed_audio = audio_before.append(audio_chunk, crossfade=crossfade_before)
+
+        logger.debug("Length before: %s - after: %s", len(songtwister.audio), len(transformed_audio))
+        songtwister = songtwister.spawn_new_instance(new_audio=transformed_audio)
+        # Then at the end of this iteration, respawn the object with new attributes and audio.
+        # And then the next iteration does it again.
+        return songtwister
+
     # PROCESSING
     def edit(self, edit_list: list) -> Self:
         edit_index = {
             'trim': 'edit_trim',
             'keep': 'edit_keep',
+            'cut': 'edit_cut',
             'loop': 'edit_loop',
             'fade': 'edit_fade',
             'process': 'apply_processing',
@@ -722,23 +1042,86 @@ class SongTwister:
         logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
         return self.spawn_new_instance(edited)
 
-    def edit_loop(self, times=None, duration=None, keep_prefix=False, keep_suffix=False) -> Self:
-        # TODO: Allow min and max directives to duration
+    def edit_cut(self, start, end=None, length=None, **kwargs) -> Self:
+        # A lot of this logic is common "select range" and should be generified
+
+        edited = self.audio
+        if not self.bar_sequence:
+            self.build_bar_sequence()
+
+        if end is None and length is None:
+            logger.warning("Cut requires end (%s) or length (%s) to be set. "
+                           "To remove the rest of the audio, use trim instead.",
+                           end, length)
+            return self
+
+        if self._is_time(start):
+            start_position = self._time_to_ms(start)
+        elif self._is_int(start):
+            start_position = self.get_single_bar(start).get('end')
+        else:
+            logger.warning("Unknown timeformat for start: %s", start)
+            return self
+
+        if length:
+            if self._is_time(length):
+                length_ms = self._time_to_ms(end)
+            elif self._is_int(length):
+
+                length_ms = 0
+                # TODO!!!! If a number of bars is supplied, we need to be able to add that to the start bar and get the end time using that
+            else:
+                logger.warning("Unknown timeformat for length: %s", length)
+        if end:
+            if self._is_time(end):
+                end_position = self._time_to_ms(end)
+            elif self._is_int(end):
+                end_position = self.get_single_bar(end).get('start')
+            else:
+                logger.warning("Unknown timeformat for end: %s", end)
+                return self
+        if end_position <= start_position:
+            logger.warning("Could not cut from %s to %s. Skipping.", start_position, end_position)
+            return self
+
+        logger.info("Cutting from %s to %s", start_position, end_position)
+        before = self.slice(end=start_position, audio=edited)
+        after = self.slice(start=end_position, audio=edited)
+        edited = before + after
+        logger.debug("After: %s - Before: %s", len(edited), len(self.audio))
+        return self.spawn_new_instance(edited)
+
+    def edit_loop(self, times=None, duration=None, prioritize='times',
+                  keep_prefix=False, keep_suffix=False) -> Self:
+        """Loop the audio. Either supply a number of times or a duration that 
+        the audio should be looped for.
+        If both are supplied, 'prioritize' will determine which one is used.
+        Optionally, the prefix and suffix of the audio may be kept."""
         prefix = self.get_prefix() if keep_prefix else AudioSegment.empty()
         suffix = self.get_suffix() if keep_suffix else AudioSegment.empty()
         edited = self.audio
+        time_edited = None
+        duration_edited = None
+
         if times and self._is_int(times):
             logger.info("Looping %s times", times)
-            edited = edited * times
-        elif duration:
+            time_edited = edited * float(times)
+        if duration:
             duration_ms = self._time_to_ms(duration)
             logger.info("Looping for %s (%s ms)", duration, duration_ms)
             if duration_ms < len(edited):
-                edited = edited[duration_ms:]
+                duration_edited = edited[duration_ms:]
             else:
                 times = int(duration_ms / len(edited)) + 1
-                edited = edited * times
-                edited = edited[:duration_ms]
+                duration_edited = edited * times
+                duration_edited = edited[:duration_ms]
+        
+        if time_edited and not duration_edited:
+            edited = time_edited
+        elif duration_edited and not time_edited:
+            edited = duration_edited
+        else: # Both
+            edited = time_edited if prioritize == 'times' else duration_edited
         return self.spawn_new_instance(prefix + edited + suffix)
 
     def edit_fade(self, fade_in=None, fade_out=None) -> Self:
@@ -775,7 +1158,7 @@ class SongTwister:
 
         def _interpret(arg: str, pitch=False, bpm=bpm, note_key=note_key):
             if isinstance(arg, (float, int)):
-                if pitch:
+                if pitch: # Interpret as semitones
                     arg = 1 + ((1/12) * arg)
                 return float(arg)
             if not arg or not isinstance(arg, str):

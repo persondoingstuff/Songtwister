@@ -87,3 +87,11 @@ take_one:
     bars: all
     beats: 1
     beats_per_bar: 4
+
+swapper_alt:
+  crossfade: 1/32
+  effects:
+  - effect: replace next 1
+    bars: odd
+    beats: every 1 of 4
+    beats_per_bar: 4

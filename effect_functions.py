@@ -5,9 +5,9 @@ from audiosegment_patch import PatchedAudioSegment as AudioSegment
 
 logger = logging.getLogger('songtwister_effects')
 
-TransformedAudio = namedtuple('TransformedAudio', ['audio', 'updates', 'effect', 'timing_changed'])
+Transformed = namedtuple('TransformedAudio', ['audio', 'updates', 'effect', 'timing_changed'])
 
-def apply_noop(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_noop(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """Example effect function that does nothing."""
     effect_name = 'noop'
     updates = {}
@@ -15,12 +15,12 @@ def apply_noop(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
     logger.info("Applying effect: %s on %s with params: %s",
                 effect_name, songtwister, kwargs)
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=False)
 
 
-def apply_cut(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_cut(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """TODO"""
     effect_name = 'cut'
     updates = {}
@@ -30,12 +30,12 @@ def apply_cut(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
     timing_changed = True
     raise NotImplementedError
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=timing_changed)
 
 
-def apply_pad(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_pad(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """TODO"""
     effect_name = 'pad'
     updates = {}
@@ -45,12 +45,12 @@ def apply_pad(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
     raise NotImplementedError
     timing_changed = True
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=timing_changed)
 
 
-def apply_repeat(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_repeat(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """TODO"""
     effect_name = 'repeat'
     updates = {}
@@ -85,12 +85,12 @@ def apply_repeat(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio
 
     timing_changed = True
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=timing_changed)
 
 
-def apply_insert(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_insert(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """TODO"""
     effect_name = 'insert'
     updates = {}
@@ -114,19 +114,20 @@ def apply_insert(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio
     elif mode == 'transform':
         # Crossfade the original into the new
         transformed_audio = transformed_audio.append(
-            other_audio, crossfade=len(other_audio))
+            other_audio, crossfade=len(other_audio),
+            dynamic_crossfade=True)
         timing_changed = False
-    else:  # Default: append. # Put the new audio after
+    else:  # Default: append. # Put the new audio after. TODO: handle crossfade
         transformed_audio = transformed_audio + other_audio
 
     raise NotImplementedError
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=timing_changed)
 
 
-def apply_mute(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_mute(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """Replace the audio with silence."""
     effect_name = 'mute'
     updates = {}
@@ -134,12 +135,12 @@ def apply_mute(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
                 effect_name, songtwister, kwargs)
     transformed_audio = AudioSegment.silent(
         duration=len(audio), frame_rate=audio.frame_rate)
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=False)
 
 
-def apply_speed(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_speed(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """Change the playback speed, changing tempo and pitch together.
     This is a fast and primitive operation, changing the framerate in the audio
     rather than transcoding with ffmpeg."""
@@ -169,12 +170,12 @@ def apply_speed(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
         updates['duration_before'] = len(audio)
         updates['duration_after'] = len(transformed_audio)
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=timing_changed)
 
 
-def apply_pan(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_pan(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """Set the audio pan.
       pan: The pan position. Hard left is -100 and hard right is 100.
         Also accepted: 'left', 'right', center.
@@ -211,14 +212,15 @@ def apply_pan(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
         if pan_position != end_position:
             transformed_audio = transformed_audio.append(
                 seg=audio.pan(end_position),
-                crossfade=len(transformed_audio))
+                crossfade=len(transformed_audio),
+                dynamic_crossfade=True)
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=False)
 
 
-def apply_reverse(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudio:
+def apply_reverse(audio: AudioSegment, songtwister, **kwargs) -> Transformed:
     """Reverse the audio. If no 'mode' is specified, the audio is just reversed.
     If mode is 'bounceback', the original audio crossfades into the reversed.
     If mode is 'zoom', the second half of the audio plays in reverse over the
@@ -231,17 +233,19 @@ def apply_reverse(audio: AudioSegment, songtwister, **kwargs) -> TransformedAudi
     if mode == 'bounceback':
         transformed_audio = audio.append(
             seg=audio.reverse(),
-            crossfade=len(audio))
+            crossfade=len(audio),
+            dynamic_crossfade=True)
     elif mode == 'zoom':
         half_length = int(len(audio) / 2)
         first_half, second_half = audio[::half_length]
         first_half = first_half.append(
             seg=second_half.reverse(),
-            crossfade=(len(second_half)))
+            crossfade=(len(second_half)),
+            dynamic_crossfade=True)
         transformed_audio = first_half + second_half
     else:
         transformed_audio = audio.reverse()
 
-    return TransformedAudio(
+    return Transformed(
         audio=transformed_audio, updates=updates,
         effect=effect_name, timing_changed=False)

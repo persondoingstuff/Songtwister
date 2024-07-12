@@ -3,6 +3,7 @@ from typing import Optional, Union, Self
 from pathlib import Path
 from collections import namedtuple
 import logging
+from dataclasses import dataclass
 
 # from pydub import AudioSegment
 from pydub import effects as pd_effects
@@ -11,12 +12,16 @@ from pydub.utils import mediainfo
 
 from audiosegment_patch import PatchedAudioSegment as AudioSegment
 import effect_functions
+import helpers
 
 logger = logging.getLogger("songtwister")
 
 ExportResult = namedtuple("ExportResult", ["filename", "peaks"])
 ProcessingResult = namedtuple("ProcessingResult", ["audio", "bpm"])
 Excerpt = namedtuple("Duration", ["start", "end", "duration"])
+# BeatsPerBar = namedtuple("BeatsPerBar", ["number", ""])
+
+
 
 class SongTwister:
     def __init__(self,
@@ -320,7 +325,7 @@ class SongTwister:
             - 'random' selects any bar or beat
             - A number selects that specific beat or bar
             - If nothing is matched (eg. if you try to select the bar
-              before #1 or a beat thad doesn't exist), it is just
+              before #1 or a beat that doesn't exist), it is just
               silently ignored
         """
         if selector == 'this':
@@ -435,7 +440,7 @@ class SongTwister:
             audio = self.audio
         # NOTE: This does not seem to change anything, so it isn't needed after all.
         # return audio[start:end]
-        print(start_sample, end_sample)
+        # print(start_sample, end_sample)
         mine = audio.get_sample_slice(
             start_sample=start_sample, end_sample=end_sample)
         return mine
@@ -484,6 +489,15 @@ class SongTwister:
         self.beat_length_ms = self._get_beat_length()
         self.bar_length_ms = self._get_bar_length()
         self.build_bar_sequence()
+
+    def make_seq(self):
+        sequence = helpers.BarSequence(
+            time=helpers.Duration(self.audio_length_ms),
+            bpm=self.bpm,
+            time_signature=helpers.TimeSignature(self.beats_per_bar)
+        )
+        # prefix = helpers.Bar()
+        return sequence
 
     def build_bar_sequence(self) -> None:
         """Create a list of dicts, representing each bar in the song.
@@ -537,6 +551,10 @@ class SongTwister:
         # TODO: Make a test: This should generate a list of dicts.
         # Each dict should be like this:
         # {'number': int, 'start': int | float, 'end': int | float}
+
+    def get_timeframe_sequence(self, start: Union[int, float, None] = None,
+                               end: Union[int, float, None] = None) -> list[dict]:
+        pass
 
     def get_bars(self, selection, bars: Optional[list] = None) -> list[dict]:
         """Extract a selection of bars from a list, or from
@@ -821,29 +839,32 @@ class SongTwister:
             effect_list = [effect]
         effects_to_apply = []
         ffmpeg_effects_to_apply = []
-        for e in effect_list:
-            if 'do' in e:
-                effect_name = e.get('do')
-                effect_function: function = effect_index.get(effect_name)
-                e['function'] = effect_function.get('function')
-                if not effect_function:
-                    logger.error("Unknown effect effect: %s", e)
-                    continue
-                if effect_function.get('ffmpeg'):
-                    ffmpeg_effects_to_apply.append(e)
-                else:
-                    effects_to_apply.append(e)
+        for effect_item in effect_list:
+            effect_name = effect_item.get('do')
+            if not effect_name:
+                logger.error("Skiping invalid effect: %s", effect_item)
+                continue
+            effect_function = effect_index.get(effect_name)
+            if not effect_function or 'function' not in effect_function:
+                logger.error("Unknown effect effect: %s", effect_item)
+                continue
+            effect_item['function'] = effect_function.get('function')
+            if effect_function.get('ffmpeg'):
+                ffmpeg_effects_to_apply.append(effect_item)
             else:
-                logger.error("Invalid effect: %s", e)
-        if not effects_to_apply:
+                effects_to_apply.append(effect_item)     
+        if not effects_to_apply and not ffmpeg_effects_to_apply:
             logger.warning("No valid effects to apply in %s. Doing nothing", effect)
             return songtwister
+
+        crossfade = effect.get('crossfade') or songtwister.crossfade
+        crossfade = 0 # Disable for now
+        # TODO: Split into before and after
+        # And parse crossfade - it may be 1/4 instead of ms. And that is relative to the current bpm
 
         # Mark out each segment to be processed
         targeted_segments = []
 
-        crossfade = effect.get('crossfade') or songtwister.crossfade
-        crossfade = 0 # Disable for now
 
         bar_selection = effect.get('bars')
         beat_selection = effect.get('beats')
@@ -918,6 +939,7 @@ class SongTwister:
                     audio=transformed_audio)
             else:
                 audio_after = AudioSegment.empty()
+
             updated_params = {}
             applied = []
             # Group edits in ffmpeg based and native ones. Do them separately
@@ -927,7 +949,7 @@ class SongTwister:
             for effect_item in effects_to_apply:
                 logger.info("Applying effect: %s", effect_item)
                 effect_function: function = effect_item.get('function')
-                transformed: effect_functions.TransformedAudio = effect_function(
+                transformed: effect_functions.Transformed = effect_function(
                     audio=audio_chunk, songtwister=songtwister, **effect_item)
                 audio_chunk = transformed.audio
                 updated_params.update(transformed.updates)
@@ -937,15 +959,16 @@ class SongTwister:
                 # Here we hand off to a function that we get from an index.
                 # They have a common interface. Take a audio chunk and the songtwister object, it came from.
                 # Return a new audio chunk and a description of what changed.
-                # Eg. it was removed, had its speed changed, or was repeated - in which case we will need to adapt the song structure element.
+                # Eg. it was removed, had its speed changed, or was repeated - 
+                # in which case we will need to adapt the song structure element.
 
             logger.info("Effects applied: %s", applied)
             logger.info("Updated: %s", updated_params)
             # NOTE!! We need to make the audio chunks longer to match the audio lost with the crossfade
-            crossfade_after = (crossfade, len(audio_chunk), len(audio_after))
-            audio_chunk = audio_chunk.append(audio_after, crossfade=crossfade_after)
-            crossfade_before = (crossfade, len(audio_chunk), len(audio_before))
-            transformed_audio = audio_before.append(audio_chunk, crossfade=crossfade_before)
+            crossfade_after = crossfade #min(crossfade, len(audio_chunk), len(audio_after))
+            audio_chunk = audio_chunk.append(audio_after, crossfade=crossfade_after, dynamic_crossfade=True)
+            crossfade_before = crossfade #min(crossfade, len(audio_chunk), len(audio_before))
+            transformed_audio = audio_before.append(audio_chunk, crossfade=crossfade_before, dynamic_crossfade=True)
 
         logger.debug("Length before: %s - after: %s", len(songtwister.audio), len(transformed_audio))
         songtwister = songtwister.spawn_new_instance(new_audio=transformed_audio)
@@ -1435,6 +1458,8 @@ class SongTwister:
         logger.info("Applying effects")
         if not self.audio:
             self.load_audio()
+        if not self.bar_sequence:
+            self.build_bar_sequence()
         effect_map = self._prepare_effects()
         if not effect_map:
             logger.warning("No effects to apply - returning original audio.")
@@ -1541,7 +1566,7 @@ class SongTwister:
                             insert_beat: str = insert_parts[2]
                         # Set bar boundaries
                         first_bar = 1
-                        last_bar = max([x.get('number') for x in self.bar_sequence])
+                        last_bar = max([x.get('number') for x in self.bar_sequence if 'number' in x])
                         # Select bar
                         selected_insert_bar = self.perform_single_selection(
                             selector=insert_bar, current=current_bar_number,

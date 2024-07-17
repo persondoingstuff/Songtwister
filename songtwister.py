@@ -12,7 +12,7 @@ from pydub.utils import mediainfo
 
 from audiosegment_patch import PatchedAudioSegment as AudioSegment
 import effect_functions
-import helpers
+import models
 
 logger = logging.getLogger("songtwister")
 
@@ -491,10 +491,10 @@ class SongTwister:
         self.build_bar_sequence()
 
     def make_seq(self):
-        sequence = helpers.BarSequence(
-            time=helpers.Duration(self.audio_length_ms),
+        sequence = models.BarSequence(
+            time=models.Duration(self.audio_length_ms),
             bpm=self.bpm,
-            time_signature=helpers.TimeSignature(self.beats_per_bar)
+            time_signature=models.TimeSignature(self.beats_per_bar)
         )
         # prefix = helpers.Bar()
         return sequence

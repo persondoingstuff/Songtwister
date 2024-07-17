@@ -1,0 +1,139 @@
+wonkyswing:
+  comment: Swing a 16th note triplets. A more laidback swing that the regular one. But it cuts against the regular beat divisions, which might sound strange in some songs.
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 6 of 6
+    beats_per_bar: 24
+wonkyswing_more:
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 5 of 5
+    beats_per_bar: 20
+wonkyswing_less:
+  comment: This adds a very light swing. It divides beats into 7 and removes the last. This breaks regular beat divisions, so it has a jerky sound.
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 7 of 7
+    beats_per_bar: 28
+wonkyswing_uneven1:
+  comment: Swing at both 5 and 6 divisions of each beat, alternately.
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: 12, 24
+    beats_per_bar: 24
+  - effect: remove
+    bars: all
+    beats: 5, 15
+    beats_per_bar: 20
+wonkyswing_uneven3:
+  crossfade: 1/16
+  comment: Swing at both 5 and 7 divisions of each beat, alternately.
+  effects:
+  - effect: remove
+    bars: all
+    beats: 14, 28
+    beats_per_bar: 28 # 7 per beat
+  - effect: remove
+    bars: all
+    beats: 5, 15
+    beats_per_bar: 20 # 5 per beat
+wonkyswing_uneven2:
+  comment: Swing at both 6 and 5 divisions of each beat, alternately.
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: 6, 18
+    beats_per_bar: 24
+  - effect: remove
+    bars: all
+    beats: 10, 20
+    beats_per_bar: 20
+wonkyswing_alt:
+  crossfade: 1/16
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 5 of 6
+    beats_per_bar: 24
+wonkyswing_alt2:
+  comment: This one swings a 1/16 triplets, but alternates between removing the 6th and 5th in each group of 6 subbeats
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: 6,11,18,23
+    beats_per_bar: 24
+wonkyswing_earlybackbeat:
+  crossfade: 1/24
+  effects:
+  - effect: remove
+    bars: all
+    beats: 20-24,45-47,68-72,93-95
+    beats_per_bar: 96
+wonkyswing_live:
+  comment: This takes the main 'wonkyswing' and adds small variations in what beats are removed when, making it less static and predictable
+  crossfade: 1/24
+  effects:
+  - effect: remove
+    bars: odd
+    beats: 6,11,18,23
+    beats_per_bar: 24
+  - effect: remove
+    bars: even
+    beats: 5,12,17,24
+    beats_per_bar: 24
+wonky_counter:
+  comment: Remove every fourth triplet 8th notes (that is, 1/12 notes). Some songs will get a polyrhythmic feel from this
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 12
+wonky_counter2:
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: every 4 of 4
+    beats_per_bar: 24
+wonky_five:
+  comment: Remove some odd 1/8s, making the song 5/8
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: 3,5,7
+    beats_per_bar: 8
+wonky_stutter:
+  comment: Remove 6 of each 16th notes in each bar, making the song 5/8 and very stuttery and jerky
+  crossfade: 1/32
+  effects:
+  - effect: remove
+    bars: all
+    beats: 3,5,7,10,12,14
+    beats_per_bar: 16
+wonky_stutter2:
+  crossfade: 1/64
+  effects:
+  - effect: remove
+    bars: all
+    beats: 3,5,7,9,11,13,15
+    beats_per_bar: 16
+wonky_repeat:
+  comment: Repeat beat 1 instead of beat 2, and beat 3 instead of beat 4
+  crossfade: 1/64
+  effects:
+  - effect: replace this previous
+    bars: all
+    beats: every 2 of 2
+    beats_per_bar: 4

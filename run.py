@@ -140,6 +140,25 @@ def import_song(filename: str | Path) -> SongTwister:
     return SongTwister(**data)
 
 
+def select_presets(preset_list: list[str], selection: str) -> list[str]:
+    presets_to_apply = []
+    preset_list = [x.lower() for x in preset_list]
+    for selector in selection.split(','):
+        selector = selector.lower().strip()
+        if selector == '*':
+            logger.info("Rendering every preset")
+            return preset_list
+        if selector in preset_list:
+            presets_to_apply.append(selector)
+        elif '*' in selector:
+            wildcard_parts = selector.split('*')
+            presets_to_apply.extend([x for x in preset_list if x.startswith(
+                wildcard_parts[0]) and x.endswith(wildcard_parts[-1])])
+        else:
+            logger.info("Could not find preset '%s' - skipping", selector)
+    return list(set(presets_to_apply))
+
+
 def get_args(overwrite_default: bool = False, make_html_default: bool = False,
              verbose_default: bool = False) -> argparse.Namespace:
     parser = argparse.ArgumentParser()
@@ -281,17 +300,19 @@ def main() -> None:
     if make_all or not preset_name:
         presets_to_apply: list[str] = preferences_config.get('main_preset_set')
         logger.info("Rendering the main preset set.")
-    elif preset_name == '*':
-        presets_to_apply = list(all_presets.keys())
-        logger.info("Rendering every preset.")
+    # elif preset_name == '*':
+    #     presets_to_apply = list(all_presets.keys())
+    #     logger.info("Rendering every preset.")
+    # else:
+    #     presets_to_apply = [preset_name]
     else:
-        presets_to_apply = [preset_name]
+        presets_to_apply: list[str] = select_presets(
+            preset_list=list(all_presets.keys()), selection=preset_name)
 
     # Set crossfade if it has been supplied as an arg
-    if args.crossfade:
-        crossfade = args.crossfade
-        if crossfade.isnumeric():
-            crossfade = int(crossfade)
+    crossfade = args.crossfade
+    if crossfade and crossfade.isnumeric():
+        crossfade = int(crossfade)
 
     song = SongTwister(**song_data)
     if 'edit' in song_data:
@@ -306,20 +327,22 @@ def main() -> None:
             logger.error("Failed to find preset '%s'", preset)
             continue
 
+        preset_crossfade = crossfade
         # If a specifc crossfade has not been passed, we look in the preset
-        if crossfade is None:
-            crossfade = preset_data.get('crossfade')
+        if preset_crossfade is None:
+            preset_crossfade = preset_data.get('crossfade')
+
         # If the preset does not have a crossfade defined, we use the default
-        if crossfade is None:
-            crossfade = preferences_config.get('crossfade')
-        song_object.set_crossfade(crossfade)
+        if preset_crossfade is None:
+            preset_crossfade = preferences_config.get('crossfade')
+        song_object.set_crossfade(preset_crossfade)
 
         if 'edit' in preset_data:
             song_object = song_object.edit(preset_data.get('edit'))
 
         logger.info(
             "Processing '%s' using the preset %s and a crossfade of %s",
-            song_object.filename, preset, crossfade)
+            song_object.filename, preset, preset_crossfade)
 
 
         # The song config may limit the preset to certain bars
@@ -337,7 +360,7 @@ def main() -> None:
             song_object.add_effects(effects)
             song_object = song_object.apply_effects()
 
-        fade_label = crossfade.replace('/', '-') if isinstance(crossfade, str) else str(crossfade)
+        fade_label = preset_crossfade.replace('/', '-') if isinstance(preset_crossfade, str) else str(preset_crossfade)
         export_version_name = "_".join((
             version_name, preset, f"fade-{fade_label}")).removeprefix('_')
         # TODO: Get the output path first and check that it is can be
